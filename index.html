@@ -2604,27 +2604,84 @@ function renderForYou(displayItems, poolItems, fetchedAt) {
   window._foryouPool = poolItems;
 }
 
-function playForYouItem(index) {
+async function playForYouItem(index) {
   const item = window._foryouItems?.[index];
   if (!item) return;
 
+  const apiKey = document.getElementById('apiKey').value.trim() || localStorage.getItem('yt_radar_key');
+  if (!apiKey) { showStatus('請先填入 API Key', 'error'); return; }
+
+  // Set active tag to this item's source tag
   activeTags = [item.sourceTag];
   renderActiveTags();
+  renderMemory();
 
-  queue = [{
-    id: { videoId: item.videoId },
-    snippet: {
-      title: item.title,
-      channelTitle: item.channelTitle,
-      channelId: item.channelId || '',
-      thumbnails: { default: { url: item.thumbnail }, medium: { url: item.thumbnail } }
+  showStatus('<span class="loading-dot">載入中</span>', 'loading');
+
+  try {
+    // Do a full search with this tag to populate the queue
+    const params = new URLSearchParams({
+      part: 'snippet', q: item.sourceTag + ' music',
+      type: 'video', order: 'relevance',
+      maxResults: 15, videoCategoryId: '10',
+      videoEmbeddable: 'true', key: apiKey
+    });
+
+    const res = await fetch('https://www.googleapis.com/youtube/v3/search?' + params);
+    const data = await res.json();
+
+    if (data.error || !data.items?.length) {
+      // Fallback: play just this one item if search fails
+      queue = [{
+        id: { videoId: item.videoId },
+        snippet: {
+          title: item.title,
+          channelTitle: item.channelTitle,
+          channelId: item.channelId || '',
+          thumbnails: { default: { url: item.thumbnail }, medium: { url: item.thumbnail } }
+        }
+      }];
+      playedIds = new Set();
+      nextPageToken = null;
+      discoverPhase = 0;
+      showStatus('', '');
+      openPlayer(0);
+      return;
     }
-  }];
-  playedIds = new Set();
-  nextPageToken = null;
-  discoverPhase = 0;
 
-  openPlayer(0);
+    const items = filterMusicItems(data.items);
+    nextPageToken = data.nextPageToken || null;
+    discoverPhase = 0;
+    playedIds = new Set();
+
+    // Try to find the clicked item in results and put it first
+    const clickedVideoId = item.videoId;
+    const clickedIndex = items.findIndex(v => v.id.videoId === clickedVideoId);
+
+    if (clickedIndex > 0) {
+      // Move clicked item to front
+      const clicked = items.splice(clickedIndex, 1)[0];
+      items.unshift(clicked);
+    } else if (clickedIndex === -1) {
+      // Item not in results → prepend it manually
+      items.unshift({
+        id: { videoId: item.videoId },
+        snippet: {
+          title: item.title,
+          channelTitle: item.channelTitle,
+          channelId: item.channelId || '',
+          thumbnails: { default: { url: item.thumbnail }, medium: { url: item.thumbnail } }
+        }
+      });
+    }
+
+    queue = items;
+    showStatus(`找到 ${queue.length} 首`, 'success');
+    openPlayer(0);
+
+  } catch(e) {
+    showStatus('網路錯誤：' + e.message, 'error');
+  }
 }
 
 /* ── Shuffle: re-pick from pool, NO API call. Has cooldown to prevent spam. ── */
