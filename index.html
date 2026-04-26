@@ -1,0 +1,3668 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>YouTube 音樂雷達</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+TC:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0a0a0a;
+  --surface: #111111;
+  --surface2: #1a1a1a;
+  --surface3: #222222;
+  --border: rgba(255,255,255,0.08);
+  --border-hover: rgba(255,255,255,0.18);
+  --text: #f0f0f0;
+  --text-muted: #666;
+  --text-dim: #444;
+  --red: #ff2d2d;
+  --red-dim: rgba(255,45,45,0.12);
+  --red-glow: rgba(255,45,45,0.25);
+  --mono: 'Space Mono', monospace;
+  --sans: 'Noto Sans TC', sans-serif;
+}
+
+body {
+  background: var(--bg); color: var(--text);
+  font-family: var(--sans); min-height: 100vh; overflow-x: hidden;
+}
+body::before {
+  content: ''; position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(255,45,45,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,45,45,0.03) 1px, transparent 1px);
+  background-size: 40px 40px; pointer-events: none; z-index: 0;
+}
+
+.app { position: relative; z-index: 1; }
+
+.search-panel { max-width: 760px; margin: 0 auto; padding: 52px 24px 60px; }
+
+/* ── RESULTS DRAWER (slides from right) ── */
+.drawer-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(2px);
+  z-index: 140;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s;
+}
+.drawer-overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.results-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 420px;
+  max-width: 90vw;
+  height: 100vh;
+  background: var(--surface);
+  border-left: 1px solid var(--border-hover);
+  box-shadow: -10px 0 32px rgba(0,0,0,0.5);
+  z-index: 145;
+  transform: translateX(100%);
+  transition: transform 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.results-drawer.show {
+  transform: translateX(0);
+}
+
+.drawer-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.drawer-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.drawer-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--red);
+  text-transform: uppercase;
+}
+
+.drawer-subtitle {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.drawer-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.drawer-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex: 1;
+}
+.drawer-btn:hover {
+  border-color: var(--border-hover);
+  color: var(--text);
+}
+
+.drawer-btn-primary {
+  background: var(--red);
+  border-color: var(--red);
+  color: white;
+  font-weight: 700;
+}
+.drawer-btn-primary:hover {
+  opacity: 0.9;
+  color: white;
+  box-shadow: 0 0 16px var(--red-glow);
+}
+
+.drawer-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+.drawer-list::-webkit-scrollbar { width: 4px; }
+.drawer-list::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 2px; }
+
+.drawer-item {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  margin-bottom: 4px;
+  border: 1px solid transparent;
+  background: var(--surface);
+}
+.drawer-item:hover {
+  background: var(--surface2);
+  border-color: var(--border-hover);
+}
+
+.drawer-thumb {
+  width: 100px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+  background: var(--surface3);
+}
+
+.drawer-info { flex: 1; min-width: 0; }
+
+.drawer-track-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.4;
+  margin-bottom: 3px;
+}
+
+.drawer-channel {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.drawer-num {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+  width: 24px;
+  text-align: center;
+}
+
+/* Language Switcher in top right corner of search panel */
+.lang-switcher {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  z-index: 50;
+}
+
+.lang-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 7px 11px;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.lang-btn:hover {
+  border-color: var(--border-hover);
+  color: var(--text);
+}
+.lang-btn svg { opacity: 0.7; }
+.lang-caret { font-size: 9px; opacity: 0.7; }
+
+.lang-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 120px;
+  background: var(--surface);
+  border: 1px solid var(--border-hover);
+  border-radius: 5px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+  padding: 4px;
+  display: none;
+  z-index: 60;
+}
+.lang-dropdown.show { display: block; }
+
+.lang-option {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 8px 12px;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 4px;
+  transition: background 0.12s;
+}
+.lang-option:hover { background: var(--surface2); }
+.lang-option.active {
+  color: var(--red);
+  background: var(--red-dim);
+}
+
+/* ── FOR YOU SECTION ── */
+.foryou-section {
+  margin-top: 36px;
+  padding-top: 28px;
+  border-top: 1px solid var(--border);
+}
+
+/* When ForYou is at the top of the page, flip the divider to bottom */
+.foryou-section.foryou-top {
+  margin-top: 0;
+  margin-bottom: 32px;
+  padding-top: 0;
+  padding-bottom: 28px;
+  border-top: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.foryou-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.foryou-title {
+  display: flex; align-items: center; gap: 10px;
+}
+
+.foryou-label {
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 2px; text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.foryou-heading {
+  font-size: 14px; font-weight: 500; color: var(--text);
+}
+
+.foryou-controls {
+  display: flex; gap: 6px;
+}
+
+.foryou-btn {
+  background: none; border: 1px solid var(--border);
+  border-radius: 5px; color: var(--text-muted);
+  font-family: var(--mono); font-size: 10px;
+  padding: 6px 12px; cursor: pointer;
+  transition: all 0.15s; display: flex; align-items: center; gap: 5px;
+}
+.foryou-btn:hover { border-color: var(--border-hover); color: var(--text); }
+.foryou-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.foryou-btn.shuffle-btn:not(:disabled):hover { color: var(--red); border-color: rgba(255,45,45,0.4); }
+
+.foryou-meta {
+  font-family: var(--mono); font-size: 10px; color: var(--text-dim);
+  margin-bottom: 10px;
+}
+
+.foryou-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.foryou-item {
+  display: flex; gap: 10px; align-items: center;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+  animation: forYouIn 0.4s ease both;
+}
+.foryou-item:hover {
+  background: var(--surface2);
+  border-color: var(--red);
+}
+
+@keyframes forYouIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.foryou-thumb {
+  width: 80px; height: 46px; object-fit: cover;
+  border-radius: 3px; flex-shrink: 0; background: var(--surface2);
+}
+
+.foryou-info { flex: 1; min-width: 0; }
+
+.foryou-track-title {
+  font-size: 12px; font-weight: 500; color: var(--text);
+  display: -webkit-box; -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical; overflow: hidden; line-height: 1.35;
+}
+
+.foryou-tag-pill {
+  display: inline-block;
+  font-family: var(--mono); font-size: 9px;
+  padding: 2px 6px; border-radius: 10px;
+  background: var(--red-dim); color: var(--red);
+  border: 1px solid rgba(255,45,45,0.2);
+  margin-top: 4px;
+}
+
+.foryou-empty {
+  text-align: center; padding: 30px 20px;
+  font-family: var(--mono); font-size: 11px; color: var(--text-dim);
+  background: var(--surface); border: 1px dashed var(--border);
+  border-radius: 6px;
+}
+
+.foryou-loading {
+  text-align: center; padding: 30px;
+  font-family: var(--mono); font-size: 11px; color: var(--text-muted);
+}
+
+.player-layout { display: none; height: 100vh; }
+.player-layout.active { display: flex; }
+
+.player-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+.player-sidebar {
+  width: 300px; flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+
+/* ── HEADER ── */
+header { margin-bottom: 48px; }
+.logo-row { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+.yt-icon {
+  width: 36px; height: 36px; background: var(--red); border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; box-shadow: 0 0 24px var(--red-glow);
+}
+h1 { font-family: var(--mono); font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+.subtitle { font-family: var(--mono); font-size: 12px; color: var(--text-muted); letter-spacing: 0.5px; margin-left: 50px; }
+
+/* ── FORM ── */
+.section-label {
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 8px;
+}
+input[type="text"], input[type="password"], select {
+  width: 100%; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: 13px;
+  padding: 11px 14px; outline: none; transition: border-color 0.2s, box-shadow 0.2s; appearance: none;
+}
+input:focus, select:focus { border-color: var(--red); box-shadow: 0 0 0 3px var(--red-dim); }
+input::placeholder { color: var(--text-dim); }
+select {
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23666' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px;
+}
+.divider { width: 100%; height: 1px; background: var(--border); margin: 28px 0; }
+
+.api-row { position: relative; margin-bottom: 28px; }
+.eye-btn {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; cursor: pointer; color: var(--text-dim); padding: 4px; transition: color 0.2s;
+}
+.eye-btn:hover { color: var(--text-muted); }
+
+/* ── TAGS ── */
+.tag-section { margin-bottom: 28px; }
+.tag-input-row { display: flex; gap: 8px; position: relative; align-items: stretch; }
+
+/* Wrapper that contains both active tags and the input field */
+.tag-input-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  position: relative;
+  transition: border-color 0.2s;
+  min-height: 38px;
+}
+.tag-input-wrapper:focus-within {
+  border-color: var(--red);
+  box-shadow: 0 0 0 2px var(--red-dim);
+}
+
+.active-tags-inline {
+  display: contents;  /* let children participate in wrapper's flex layout */
+}
+
+/* Override the input inside the wrapper to look seamless */
+.tag-input-wrapper input#tagInput {
+  flex: 1;
+  min-width: 120px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 4px 4px;
+  margin: 0;
+}
+.tag-input-wrapper input#tagInput::placeholder { color: var(--text-dim); }
+
+/* Autocomplete dropdown */
+.autocomplete-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 60px;  /* leave room for + button */
+  background: var(--surface);
+  border: 1px solid var(--border-hover);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 50;
+  display: none;
+}
+.autocomplete-dropdown.show { display: block; }
+.autocomplete-dropdown::-webkit-scrollbar { width: 4px; }
+.autocomplete-dropdown::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 2px; }
+
+.autocomplete-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s, color 0.1s;
+}
+.autocomplete-item:last-child { border-bottom: none; }
+.autocomplete-item:hover, .autocomplete-item.highlighted {
+  background: var(--surface2);
+  color: var(--text);
+}
+.autocomplete-icon { opacity: 0.5; font-size: 11px; }
+.autocomplete-text strong { color: var(--red); }
+.autocomplete-delete {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 6px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+.autocomplete-item:hover .autocomplete-delete { opacity: 0.6; }
+.autocomplete-delete:hover { color: #ff6b6b; opacity: 1 !important; }
+
+.tag-add-btn {
+  padding: 0 16px; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text-muted); font-family: var(--mono); font-size: 18px;
+  line-height: 1; cursor: pointer; flex-shrink: 0; transition: border-color 0.2s, color 0.2s;
+}
+.tag-add-btn:hover { border-color: var(--red); color: var(--red); }
+.tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--red-dim); border: 1px solid rgba(255,45,45,0.3);
+  border-radius: 3px; padding: 4px 10px;
+  font-family: var(--mono); font-size: 12px; color: var(--red); animation: tagIn 0.2s ease;
+}
+@keyframes tagIn { from { opacity:0; transform:scale(0.9); } to { opacity:1; transform:scale(1); } }
+.tag-remove { cursor: pointer; opacity: 0.6; font-size: 14px; line-height: 1; background: none; border: none; color: var(--red); padding: 0; transition: opacity 0.15s; }
+.tag-remove:hover { opacity: 1; }
+
+/* ── PRESETS (Tag Combos) ── */
+.presets-section {
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.presets-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px;
+}
+.presets-label {
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 1px; color: var(--text-dim);
+}
+.preset-save-btn {
+  font-family: var(--mono); font-size: 10px;
+  background: none; border: 1px dashed var(--border);
+  border-radius: 3px; color: #7eb8ff;
+  padding: 4px 10px; cursor: pointer;
+  transition: all 0.15s; letter-spacing: 0.5px;
+}
+.preset-save-btn:hover { background: rgba(126,184,255,0.06); border-color: rgba(126,184,255,0.5); }
+.preset-save-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.presets-list { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.preset-chip {
+  display: inline-flex; align-items: center;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  font-family: var(--mono);
+  transition: border-color 0.15s;
+}
+.preset-chip:hover { border-color: rgba(126,184,255,0.4); }
+
+.preset-load {
+  padding: 5px 10px;
+  background: none; border: none;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+  display: flex; align-items: center; gap: 5px;
+}
+.preset-load:hover { color: #7eb8ff; }
+
+.preset-icon { font-size: 10px; opacity: 0.6; }
+
+.preset-delete {
+  padding: 5px 8px;
+  background: none; border: none;
+  border-left: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.preset-delete:hover { color: #ff6b6b; background: rgba(255,107,107,0.08); }
+
+.preset-empty {
+  font-family: var(--mono); font-size: 10px;
+  color: var(--text-dim); padding: 4px 0;
+}
+
+/* Save preset prompt modal (small inline) */
+.preset-prompt {
+  display: none;
+  margin-top: 8px;
+  padding: 10px;
+  background: var(--surface2);
+  border: 1px solid rgba(126,184,255,0.3);
+  border-radius: 5px;
+}
+.preset-prompt.show { display: block; }
+.preset-prompt-row { display: flex; gap: 6px; }
+.preset-prompt-row input {
+  flex: 1;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 4px; color: var(--text);
+  font-family: var(--mono); font-size: 11px;
+  padding: 6px 10px; outline: none;
+}
+.preset-prompt-row input:focus { border-color: #7eb8ff; }
+.preset-prompt-btn {
+  padding: 6px 12px; font-family: var(--mono); font-size: 11px;
+  background: rgba(126,184,255,0.15); color: #7eb8ff;
+  border: 1px solid rgba(126,184,255,0.3); border-radius: 4px;
+  cursor: pointer; transition: all 0.15s;
+}
+.preset-prompt-btn:hover { background: rgba(126,184,255,0.25); }
+.preset-prompt-btn.cancel {
+  background: none; color: var(--text-muted); border-color: var(--border);
+}
+.preset-prompt-hint {
+  font-family: var(--mono); font-size: 10px; color: var(--text-dim);
+  margin-top: 6px;
+}
+
+.memory-section { margin-top: 14px; }
+.memory-label { font-family: var(--mono); font-size: 10px; color: var(--text-dim); letter-spacing: 1px; margin-bottom: 8px; }
+.memory-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.mem-tag { display: inline-flex; align-items: center; background: var(--surface2); border: 1px solid var(--border); border-radius: 3px; overflow: hidden; }
+.mem-tag-add { padding: 4px 10px; cursor: pointer; background: none; border: none; color: var(--text-muted); font-family: var(--mono); font-size: 11px; transition: color 0.15s; }
+.mem-tag-add:hover { color: var(--red); }
+.mem-tag-del { padding: 4px 7px; cursor: pointer; background: none; border: none; border-left: 1px solid var(--border); color: var(--text-dim); font-size: 13px; line-height: 1; transition: color 0.15s, background 0.15s; }
+.mem-tag-del:hover { color: #ff6b6b; background: rgba(255,107,107,0.1); }
+
+/* ── OPTIONS ── */
+.options-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+
+/* ── BUTTONS ROW ── */
+.btn-row { display: flex; gap: 8px; }
+
+/* ── RECOMMENDATIONS ── */
+.recommendations-section {
+  margin: 0 0 20px;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.rec-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.rec-title-bar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+
+.rec-label {
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 1.5px; color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.rec-tag-display {
+  font-family: var(--mono); font-size: 10px;
+  color: var(--red); background: var(--red-dim);
+  border: 1px solid rgba(255,45,45,0.2);
+  padding: 2px 8px; border-radius: 3px;
+}
+
+.rec-shuffle-btn {
+  display: flex; align-items: center; gap: 6px;
+  background: none; border: 1px solid var(--border);
+  border-radius: 4px; color: var(--text-muted);
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.5px; padding: 5px 10px;
+  cursor: pointer; transition: all 0.15s;
+}
+.rec-shuffle-btn:hover {
+  border-color: var(--red); color: var(--red);
+}
+.rec-shuffle-btn:disabled {
+  opacity: 0.4; cursor: not-allowed; border-color: var(--border);
+}
+
+.rec-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.rec-card {
+  display: flex; flex-direction: column;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 5px; overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.12s;
+}
+.rec-card:hover {
+  border-color: var(--red);
+  transform: translateY(-1px);
+}
+
+.rec-thumb {
+  width: 100%; aspect-ratio: 16 / 9;
+  object-fit: cover; background: var(--surface3);
+  display: block;
+}
+
+.rec-info { padding: 6px 8px 7px; }
+
+.rec-title {
+  font-size: 11px; font-weight: 500; color: var(--text);
+  line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: 3px;
+}
+
+.rec-tag-chip {
+  display: inline-block;
+  font-family: var(--mono); font-size: 9px;
+  color: var(--red); opacity: 0.8;
+}
+
+.rec-loading-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  aspect-ratio: 16 / 9;
+  position: relative;
+  overflow: hidden;
+}
+.rec-loading-card::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.03), transparent);
+  animation: shimmer 1.5s infinite;
+}
+@keyframes shimmer { 0%{transform:translateX(-100%);} 100%{transform:translateX(100%);} }
+
+.rec-meta {
+  margin-top: 8px;
+  font-family: var(--mono); font-size: 9px;
+  color: var(--text-dim); letter-spacing: 0.5px;
+  text-align: right;
+}
+
+.search-btn {
+  flex: 1; padding: 14px;
+  background: var(--red); border: none; border-radius: 6px;
+  color: white; font-family: var(--mono); font-size: 14px; font-weight: 700;
+  letter-spacing: 1px; cursor: pointer; transition: opacity 0.2s, box-shadow 0.2s, transform 0.1s;
+}
+.search-btn:hover { opacity: 0.9; box-shadow: 0 0 32px var(--red-glow); }
+.search-btn:active { transform: scale(0.99); }
+.search-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+
+/* ── STATUS ── */
+#status {
+  display: none; font-family: var(--mono); font-size: 12px;
+  margin-top: 16px; padding: 10px 14px; border-radius: 4px; border-left: 3px solid;
+}
+#status.error   { color: #ff6b6b; border-color: #ff6b6b; background: rgba(255,107,107,0.08); }
+#status.success { color: #6bffb8; border-color: #6bffb8; background: rgba(107,255,184,0.08); }
+#status.loading { color: var(--text-muted); border-color: var(--text-dim); background: var(--surface); }
+#status.info    { color: #7eb8ff; border-color: #7eb8ff; background: rgba(126,184,255,0.08); }
+
+#results { margin-top: 28px; display: flex; flex-direction: column; gap: 8px; }
+
+.result-card {
+  display: flex; gap: 14px; align-items: center; padding: 12px 14px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  cursor: pointer; transition: border-color 0.2s, background 0.2s; animation: cardIn 0.3s ease both;
+}
+.result-card:hover { border-color: var(--border-hover); background: var(--surface2); }
+@keyframes cardIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+.result-thumb { width: 112px; height: 64px; object-fit: cover; border-radius: 4px; flex-shrink: 0; background: var(--surface2); }
+.thumb-placeholder { width: 112px; height: 64px; border-radius: 4px; flex-shrink: 0; background: var(--surface2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; }
+.result-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.result-title { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.result-sub { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.result-date { font-family: var(--mono); font-size: 11px; color: var(--text-dim); }
+.result-badge { flex-shrink: 0; font-family: var(--mono); font-size: 10px; color: var(--text-dim); border: 1px solid var(--border); border-radius: 3px; padding: 3px 8px; align-self: flex-start; margin-top: 2px; }
+
+.player-topbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  background: var(--surface); flex-shrink: 0; flex-wrap: wrap;
+}
+
+/* Quick search in player topbar */
+.quick-search-wrap {
+  position: relative;
+  width: 220px;
+  flex-shrink: 0;
+}
+.quick-search-input {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 6px 10px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
+}
+.quick-search-input:focus {
+  border-color: var(--red);
+  box-shadow: 0 0 0 2px var(--red-dim);
+}
+.quick-search-input::placeholder { color: var(--text-dim); }
+
+.quick-search-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 360px;   /* wider than input to show results comfortably */
+  max-height: 420px;
+  overflow-y: auto;
+  z-index: 300;
+  background: var(--surface);
+  border: 1px solid var(--border-hover);
+  border-radius: 6px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+  display: none;
+}
+.quick-search-dropdown.show { display: block; }
+.quick-search-dropdown::-webkit-scrollbar { width: 3px; }
+.quick-search-dropdown::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 2px; }
+
+/* Header inside results dropdown */
+.qs-results-header {
+  padding: 8px 12px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* Result item */
+.qs-result-item {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: background 0.12s;
+  border-bottom: 1px solid var(--border);
+}
+.qs-result-item:last-child { border-bottom: none; }
+.qs-result-item:hover, .qs-result-item.highlight { background: var(--surface2); }
+
+.qs-thumb {
+  width: 64px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 3px;
+  flex-shrink: 0;
+  background: var(--surface3);
+}
+.qs-thumb-ph {
+  width: 64px;
+  height: 36px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  background: var(--surface3);
+}
+.qs-info { flex: 1; min-width: 0; }
+.qs-title {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.qs-ch {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.back-btn {
+  background: none; border: 1px solid var(--border); border-radius: 5px;
+  color: var(--text-muted); font-family: var(--mono); font-size: 11px;
+  padding: 6px 12px; cursor: pointer; white-space: nowrap; transition: border-color 0.2s, color 0.2s;
+}
+.back-btn:hover { border-color: var(--border-hover); color: var(--text); }
+.now-playing-label { flex: 1; min-width: 0; font-size: 13px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.now-playing-label strong { color: var(--text); font-weight: 500; }
+
+.ctrl-btn {
+  background: none; border: 1px solid var(--border); border-radius: 5px;
+  color: var(--text-muted); font-family: var(--mono); font-size: 11px;
+  padding: 6px 10px; cursor: pointer; white-space: nowrap; transition: all 0.2s; flex-shrink: 0;
+}
+.ctrl-btn.on { color: var(--red); border-color: rgba(255,45,45,0.4); }
+.ctrl-btn:hover { border-color: var(--border-hover); color: var(--text); }
+
+/* ── PLAYER CONTAINER ── */
+.player-container { flex: 1; background: #000; overflow: hidden; }
+#yt-player-div { width: 100%; height: 100%; }
+#yt-player-div iframe { width: 100% !important; height: 100% !important; }
+
+/* ── SIDEBAR ── */
+.sidebar-header { padding: 12px 14px 8px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.sidebar-title-bar { font-family: var(--mono); font-size: 10px; letter-spacing: 2px; color: var(--text-dim); text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
+
+.mode-badge {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 1px; padding: 2px 6px; border-radius: 2px;
+  background: var(--red-dim); color: var(--red); border: 1px solid rgba(255,45,45,0.25);
+  transition: opacity 0.2s;
+}
+.mode-badge.dim { opacity: 0.3; }
+.mode-badge.blue { background: rgba(126,184,255,0.12); color: #7eb8ff; border-color: rgba(126,184,255,0.25); }
+
+.sidebar-list { flex: 1; overflow-y: auto; padding: 8px; }
+.sidebar-list::-webkit-scrollbar { width: 4px; }
+.sidebar-list::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 2px; }
+
+.sidebar-item {
+  display: flex; gap: 10px; align-items: center; padding: 8px; border-radius: 6px;
+  cursor: pointer; transition: background 0.15s; margin-bottom: 2px; border: 1px solid transparent;
+  position: relative;
+}
+.sidebar-item:hover { background: var(--surface2); }
+.sidebar-item.active { background: var(--red-dim); border-color: rgba(255,45,45,0.2); }
+.sidebar-item.played { opacity: 0.45; }
+
+/* Three-dot menu button */
+.sid-menu-btn {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  width: 22px; height: 22px; border-radius: 4px;
+  background: rgba(0,0,0,0.65); border: none;
+  color: var(--text-muted); cursor: pointer;
+  opacity: 0; transition: opacity 0.15s, color 0.15s, background 0.15s;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; line-height: 1; letter-spacing: 1px;
+  z-index: 2;
+}
+.sidebar-item:hover .sid-menu-btn { opacity: 1; }
+.sid-menu-btn:hover { color: var(--text); background: rgba(0,0,0,0.9); }
+
+/* Floating action menu */
+.action-menu {
+  position: fixed; z-index: 200;
+  background: var(--surface);
+  border: 1px solid var(--border-hover);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  padding: 4px; min-width: 180px;
+  font-family: var(--mono);
+}
+.action-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; font-size: 11px; color: var(--text);
+  cursor: pointer; border-radius: 4px;
+  transition: background 0.12s;
+  border: none; background: none; width: 100%; text-align: left;
+}
+.action-item:hover { background: var(--surface2); }
+.action-item.danger { color: #ff8a8a; }
+.action-item.danger:hover { background: rgba(255,107,107,0.1); }
+.action-item.action-cancel {
+  color: var(--text-dim);
+  text-align: center;
+  justify-content: center;
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+.action-item.action-cancel:hover { color: var(--text); }
+.action-divider { height: 1px; background: var(--border); margin: 4px 0; }
+
+/* Modal */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 150;
+  background: rgba(0,0,0,0.65); backdrop-filter: blur(3px);
+  display: none; align-items: center; justify-content: center; padding: 40px;
+}
+.modal-overlay.show { display: flex; }
+
+.modal {
+  background: var(--surface); border: 1px solid var(--border-hover);
+  border-radius: 10px; width: 100%; max-width: 600px;
+  max-height: 80vh; display: flex; flex-direction: column; overflow: hidden;
+}
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; border-bottom: 1px solid var(--border);
+}
+.modal-title { font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: 1px; }
+.modal-close {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--text-muted); font-family: var(--mono); font-size: 12px;
+  padding: 4px 10px; cursor: pointer; transition: all 0.15s;
+}
+.modal-close:hover { border-color: var(--border-hover); color: var(--text); }
+
+.modal-tabs { display: flex; gap: 4px; padding: 8px 14px; border-bottom: 1px solid var(--border); }
+.modal-tab {
+  background: none; border: 1px solid transparent; border-radius: 4px;
+  color: var(--text-muted); font-family: var(--mono); font-size: 10px;
+  letter-spacing: 1px; padding: 6px 10px; cursor: pointer; transition: all 0.15s;
+}
+.modal-tab:hover { color: var(--text); }
+.modal-tab.active { color: var(--red); border-color: rgba(255,45,45,0.3); background: var(--red-dim); }
+
+.modal-body { flex: 1; overflow-y: auto; padding: 14px 18px; }
+.modal-body::-webkit-scrollbar { width: 4px; }
+.modal-body::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 2px; }
+
+.modal-footer {
+  display: flex; gap: 8px; padding: 12px 18px;
+  border-top: 1px solid var(--border); justify-content: space-between;
+}
+.io-btns { display: flex; gap: 6px; }
+.io-btn {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 4px;
+  color: var(--text-muted); font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.5px; padding: 6px 12px; cursor: pointer; transition: all 0.15s;
+}
+.io-btn:hover { border-color: var(--border-hover); color: var(--text); }
+
+.blocklist-empty {
+  text-align: center; padding: 40px 20px;
+  font-family: var(--mono); color: var(--text-dim); font-size: 11px;
+}
+
+.block-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 5px;
+  margin-bottom: 6px; background: var(--surface);
+}
+.block-thumb { width: 60px; height: 34px; object-fit: cover; border-radius: 3px; flex-shrink: 0; background: var(--surface3); }
+.block-info { flex: 1; min-width: 0; }
+.block-title {
+  font-size: 12px; color: var(--text); font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.block-sub { font-size: 10px; color: var(--text-muted); font-family: var(--mono); margin-top: 2px; }
+
+.unblock-btn {
+  flex-shrink: 0; background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--text-muted); font-family: var(--mono); font-size: 10px;
+  padding: 5px 10px; cursor: pointer; transition: all 0.15s;
+}
+.unblock-btn:hover { border-color: #6bffb8; color: #6bffb8; }
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 24px; left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--surface); border: 1px solid var(--border-hover);
+  border-left: 3px solid var(--red); border-radius: 6px;
+  padding: 10px 16px; font-family: var(--mono); font-size: 11px; color: var(--text);
+  z-index: 250; opacity: 0; pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  max-width: 80vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+.sidebar-thumb { width: 80px; height: 46px; object-fit: cover; border-radius: 3px; flex-shrink: 0; background: var(--surface3); }
+.sidebar-info { flex: 1; min-width: 0; }
+.sidebar-title-text { font-size: 12px; font-weight: 500; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.4; }
+.sidebar-ch { font-size: 11px; color: var(--text-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* loading spinner in sidebar */
+.loading-more {
+  text-align: center; padding: 14px;
+  font-family: var(--mono); font-size: 11px; color: var(--text-dim);
+}
+
+/* Sentinel for infinite scroll detection */
+.scroll-sentinel {
+  height: 1px;
+  visibility: hidden;
+}
+
+/* Manual "Explore New Style" button at bottom of sidebar */
+/* Manual "Load More" button — same query, next page */
+.load-more-btn {
+  display: block;
+  width: calc(100% - 16px);
+  margin: 8px 8px 4px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+.load-more-btn:hover {
+  background: var(--surface2);
+  border-color: var(--border-hover);
+  color: var(--text);
+}
+.load-more-btn:disabled {
+  opacity: 0.5; cursor: not-allowed;
+}
+
+.explore-more-btn {
+  display: block;
+  width: calc(100% - 16px);
+  margin: 8px;
+  padding: 10px 12px;
+  background: transparent;
+  border: 1px dashed rgba(126,184,255,0.3);
+  border-radius: 6px;
+  color: #7eb8ff;
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+.explore-more-btn:hover {
+  background: rgba(126,184,255,0.06);
+  border-color: rgba(126,184,255,0.6);
+}
+.explore-more-btn:disabled {
+  opacity: 0.4; cursor: not-allowed;
+}
+
+/* End of list message when no more results */
+.list-end-msg {
+  text-align: center; padding: 20px 12px;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--text-dim); letter-spacing: 0.5px;
+}
+
+.loading-dot::after { content: ''; animation: dots 1.2s steps(3,end) infinite; }
+@keyframes dots { 0%{content:'';} 33%{content:'.';} 66%{content:'..';} 100%{content:'...';} }
+
+footer { text-align: center; font-family: var(--mono); font-size: 10px; color: var(--text-dim); letter-spacing: 1px; padding: 32px 0 0; }
+</style>
+</head>
+<body>
+<script src="https://www.youtube.com/iframe_api"></script>
+
+<div class="app">
+
+  <!-- ══ SEARCH PANEL ══ -->
+  <div class="search-panel" id="searchPanel">
+    <!-- Language Switcher -->
+    <div class="lang-switcher">
+      <button class="lang-btn" id="langBtn" onclick="toggleLangDropdown(event)">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        <span>Language</span>
+        <span class="lang-caret">▾</span>
+      </button>
+      <div class="lang-dropdown" id="langDropdown">
+        <button class="lang-option" data-lang="zh-TW" onclick="setLanguage('zh-TW')">繁中</button>
+        <button class="lang-option" data-lang="en" onclick="setLanguage('en')">English</button>
+      </div>
+    </div>
+
+    <header>
+      <div class="logo-row">
+        <div class="yt-icon">
+          <svg width="16" height="12" viewBox="0 0 16 12" fill="none"><polygon points="6,0 16,6 6,12" fill="white"/></svg>
+        </div>
+        <h1 data-i18n="appTitle">YouTube 音樂雷達</h1>
+      </div>
+      <p class="subtitle" data-i18n="subtitle">// 輸入風格 tag，追蹤最新音樂</p>
+    </header>
+
+    <!-- ══ FOR YOU RECOMMENDATIONS (top position) ══ -->
+    <div class="foryou-section foryou-top" id="foryouSection" style="display:none;">
+      <div class="foryou-header">
+        <div class="foryou-title">
+          <span class="foryou-label">// FOR YOU</span>
+          <span class="foryou-heading" data-i18n="forYouHeading">基於你的 tag 記憶</span>
+        </div>
+        <div class="foryou-controls">
+          <button class="foryou-btn shuffle-btn" id="foryouShuffleBtn" onclick="shuffleForYou()" data-i18n-title="shuffleHint" title="從快取池洗牌（不消耗配額）">
+            <span data-i18n="shuffleBatch">⇄ 換一批</span>
+          </button>
+        </div>
+      </div>
+      <div class="foryou-meta" id="foryouMeta"></div>
+      <div class="foryou-grid" id="foryouGrid"></div>
+    </div>
+
+    <div class="section-label" data-i18n="apiKey">API 金鑰</div>
+    <div class="api-row">
+      <input type="password" id="apiKey" placeholder="AIza..." autocomplete="off" />
+      <button class="eye-btn" onclick="toggleKey()">
+        <svg id="eyeIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="tag-section">
+      <div class="section-label" data-i18n="musicTags">音樂風格 Tags</div>
+      <div class="tag-input-row">
+        <div class="tag-input-wrapper" id="tagInputWrapper">
+          <div class="active-tags-inline" id="activeTags"></div>
+          <input type="text" id="tagInput" data-i18n-placeholder="tagPlaceholder" placeholder="輸入一種音樂風格，按 Enter 搜尋" autocomplete="off" />
+          <div class="autocomplete-dropdown" id="autocompleteDropdown"></div>
+        </div>
+        <button class="tag-add-btn" onclick="addTagFromInput()">+</button>
+      </div>
+
+      <div class="memory-section" id="memorySection" style="display:none;">
+        <div class="memory-label" data-i18n="historyHint">// 歷史 tags — 點選加入 / × 刪除</div>
+        <div class="memory-tags" id="memoryTags"></div>
+      </div>
+    </div>
+
+    <div class="options-row">
+      <div>
+        <div class="section-label" data-i18n="orderBy">排序方式</div>
+        <select id="orderType">
+          <option value="date" data-i18n="orderDate">最新上傳</option>
+          <option value="viewCount" data-i18n="orderViews">最多觀看</option>
+          <option value="relevance" selected data-i18n="orderRelevance">最相關</option>
+        </select>
+      </div>
+      <div>
+        <div class="section-label" data-i18n="discoverMode">探索模式</div>
+        <select id="discoverMode">
+          <option value="same" data-i18n="discoverSame">繼續同風格</option>
+          <option value="related" selected data-i18n="discoverRelated">探索相關風格</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="search-btn" id="searchBtn" onclick="startSearch()" data-i18n="search">SEARCH</button>
+    </div>
+
+    <div id="status"></div>
+
+    <footer>YOUTUBE MUSIC RADAR — ISLAND 38</footer>
+  </div>
+
+  <!-- ══ RESULTS DRAWER (slides from right after search) ══ -->
+  <div class="drawer-overlay" id="resultsDrawerOverlay" onclick="closeResultsDrawer()"></div>
+  <aside class="results-drawer" id="resultsDrawer">
+    <div class="drawer-header">
+      <div class="drawer-title-wrap">
+        <span class="drawer-title" id="drawerTitle"></span>
+        <span class="drawer-subtitle" id="drawerSubtitle"></span>
+      </div>
+      <div class="drawer-actions">
+        <button class="drawer-btn drawer-btn-primary" id="drawerPlayAllBtn" onclick="drawerPlayAll()" data-i18n="playAll">▶ 全部播放</button>
+        <button class="drawer-btn" onclick="closeResultsDrawer()" data-i18n="close">關閉 ✕</button>
+      </div>
+    </div>
+    <div class="drawer-list" id="drawerList"></div>
+  </aside>
+
+  <!-- ══ PLAYER LAYOUT ══ -->
+  <div class="player-layout" id="playerLayout">
+    <div class="player-main">
+      <div class="player-topbar">
+        <button class="back-btn" onclick="backToSearch()">← 返回</button>
+        <div class="now-playing-label">播放中：<strong id="nowPlayingTitle">—</strong></div>
+        <div class="quick-search-wrap">
+          <input type="text" class="quick-search-input" id="quickSearchInput" placeholder="🔍 搜尋風格..." autocomplete="off" />
+          <div class="autocomplete-dropdown quick-search-dropdown" id="quickSearchDropdown"></div>
+        </div>
+        <button class="ctrl-btn on" id="autoplayBtn" onclick="toggleAutoplay()">AUTO</button>
+        <button class="ctrl-btn" id="loopBtn" onclick="toggleLoop()" title="循環模式">↻ 關</button>
+        <button class="ctrl-btn" id="shuffleBtn" onclick="toggleShuffle()">⇄ 隨機</button>
+        <button class="ctrl-btn" id="favBtn" onclick="openFavoritesManager()" title="我的收藏">★</button>
+        <button class="ctrl-btn" id="manageBtn" onclick="openBlocklistManager()" title="管理黑名單">🚫</button>
+      </div>
+      <div class="player-container">
+        <div id="yt-player-div"></div>
+      </div>
+    </div>
+
+    <div class="player-sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-title-bar">
+          播放清單
+          <span class="mode-badge" id="modeBadge">AUTO</span>
+          <span class="mode-badge blue dim" id="loopBadge">LOOP</span>
+          <span class="mode-badge blue dim" id="shuffleBadge">SHUFFLE</span>
+          <span class="mode-badge blue dim" id="discoverBadge">DISCOVER</span>
+        </div>
+      </div>
+      <div class="sidebar-list" id="sidebarList"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ══ STATE ══ */
+let activeTags = [];
+let memoryBank = JSON.parse(localStorage.getItem('yt_radar_mem') || '[]');
+let queue = [];           // current play queue
+let playedIds = new Set();
+let currentIndex = 0;
+let autoplay = true;
+let shuffle = false;
+let loopMode = 'off';  // 'off' | 'all' | 'one'
+let scrollObserver = null;
+let lastAutoLoadTime = 0;
+let blockedVideos = new Set(JSON.parse(localStorage.getItem('yt_radar_blocked_videos') || '[]'));
+let blockedChannels = new Set(JSON.parse(localStorage.getItem('yt_radar_blocked_channels') || '[]'));
+let blockedChannelNames = JSON.parse(localStorage.getItem('yt_radar_blocked_channel_names') || '{}');
+let favorites = JSON.parse(localStorage.getItem('yt_radar_favorites') || '[]');
+let nextPageToken = null;
+let isFetching = false;
+let discoverPhase = 0;    // 0 = original, 1 = more pages, 2 = related discovery
+let ytPlayer = null;
+let playerReady = false;
+let pendingVideoId = null;
+let apiKey = '';
+let searchOrder = 'relevance';
+let discoverMode = 'related';
+
+/* ══ RELATED QUERY GENERATOR ══ */
+const relatedSuffixes = [
+  'similar artists', 'related bands', 'same era', 'influenced by',
+  'classic rock', 'hard rock', 'heavy metal', 'alternative rock',
+  '70s rock', '80s rock', '90s rock', 'guitar rock',
+  'best songs', 'live concert', 'greatest hits', 'full album'
+];
+
+/* ══ NON-MUSIC CONTENT FILTER ══ */
+const NON_MUSIC_KEYWORDS = [
+  // English
+  'interview', 'reaction', 'react ', 'reacts ',
+  'behind the scenes', 'making of', 'documentary',
+  'podcast', 'talk show', 'unboxing', 'review',
+  'tutorial', 'how to', 'lesson', 'lecture',
+  'q&a', 'q & a', 'qna', 'ama',
+  'vlog', 'announcement',
+  // Chinese (Traditional + Simplified)
+  '訪談', '访谈', '採訪', '采访', '專訪', '专访',
+  '解說', '解说', '講解', '讲解', '解析',
+  '幕後', '幕后', '花絮', '彩蛋',
+  '反應', '反应', 'reaction',
+  '介紹', '介绍', '評論', '评论', '評測', '评测',
+  '教學', '教学', '課程', '课程',
+  '直播', '播客',
+  // Japanese
+  'インタビュー', 'リアクション',
+];
+
+function isNonMusicContent(title) {
+  if (!title) return false;
+  const lower = title.toLowerCase();
+  return NON_MUSIC_KEYWORDS.some(kw => lower.includes(kw.toLowerCase()));
+}
+
+function filterMusicItems(items) {
+  return items.filter(item => {
+    if (!item.id?.videoId) return false;
+    const title = item.snippet?.title || '';
+    const channelId = item.snippet?.channelId || '';
+    if (blockedVideos.has(item.id.videoId)) return false;
+    if (blockedChannels.has(channelId)) return false;
+    return !isNonMusicContent(title);
+  });
+}
+
+/* ══ BLOCKLIST FUNCTIONS ══ */
+function blockVideo(videoId, title) {
+  blockedVideos.add(videoId);
+  saveBlocklist();
+  // Remove from current queue
+  queue = queue.filter(item => item.id.videoId !== videoId);
+  refreshUI();
+  showToast(`已封鎖：${title.length > 30 ? title.slice(0, 30) + '...' : title}`);
+}
+
+function blockChannel(channelId, channelName) {
+  blockedChannels.add(channelId);
+  blockedChannelNames[channelId] = channelName;
+  saveBlocklist();
+  // Remove all videos from this channel in current queue
+  queue = queue.filter(item => item.snippet.channelId !== channelId);
+  refreshUI();
+  showToast(`已封鎖頻道：${channelName}`);
+}
+
+function unblockVideo(videoId) {
+  blockedVideos.delete(videoId);
+  saveBlocklist();
+  renderBlocklistManager();
+}
+
+function unblockChannel(channelId) {
+  blockedChannels.delete(channelId);
+  delete blockedChannelNames[channelId];
+  saveBlocklist();
+  renderBlocklistManager();
+}
+
+function saveBlocklist() {
+  localStorage.setItem('yt_radar_blocked_videos', JSON.stringify([...blockedVideos]));
+  localStorage.setItem('yt_radar_blocked_channels', JSON.stringify([...blockedChannels]));
+  localStorage.setItem('yt_radar_blocked_channel_names', JSON.stringify(blockedChannelNames));
+}
+
+/* ══ FAVORITES ══ */
+function isFavorite(videoId) {
+  return favorites.some(f => f.videoId === videoId);
+}
+
+function saveFavorites() {
+  localStorage.setItem('yt_radar_favorites', JSON.stringify(favorites));
+}
+
+function addToFavorites(item) {
+  if (isFavorite(item.id.videoId)) return;
+  favorites.unshift({
+    videoId: item.id.videoId,
+    title: item.snippet.title,
+    channelTitle: item.snippet.channelTitle || '',
+    channelId: item.snippet.channelId || '',
+    thumbnail: item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url || '',
+    addedAt: Date.now()
+  });
+  if (favorites.length > 500) favorites = favorites.slice(0, 500);
+  saveFavorites();
+  showToast(`♥ 已加入最愛：${item.snippet.title.length > 25 ? item.snippet.title.slice(0, 25) + '...' : item.snippet.title}`);
+}
+
+function removeFromFavorites(videoId) {
+  favorites = favorites.filter(f => f.videoId !== videoId);
+  saveFavorites();
+  if (document.getElementById('favoritesModal')?.classList.contains('show')) {
+    renderFavoritesManager();
+  }
+}
+
+function refreshUI() {
+  // If current playing video got blocked, jump to next
+  if (queue.length === 0) return;
+  // Adjust currentIndex if needed
+  if (currentIndex >= queue.length) currentIndex = queue.length - 1;
+  renderSidebar();
+  updateSidebarActive();
+}
+
+function buildRelatedQuery(tags, phase) {
+  const base = tags.join(' ');
+  const suffix = relatedSuffixes[(phase - 2) % relatedSuffixes.length];
+  return `${base} ${suffix} music`;
+}
+
+/* ══ I18N (繁中 / English) ══ */
+const I18N = {
+  'zh-TW': {
+    appTitle: 'YouTube 音樂雷達',
+    subtitle: '// 輸入風格 tag，追蹤最新音樂',
+    apiKey: 'API 金鑰',
+    musicTags: '音樂風格 Tags',
+    tagPlaceholder: '輸入一種音樂風格，按 Enter 搜尋',
+    historyHint: '// 歷史 tags — 點選加入 / × 刪除',
+    orderBy: '排序方式',
+    orderDate: '最新上傳',
+    orderViews: '最多觀看',
+    orderRelevance: '最相關',
+    discoverMode: '探索模式',
+    discoverSame: '繼續同風格',
+    discoverRelated: '探索相關風格',
+    search: '搜尋',
+    searching: '搜尋中',
+    forYouHeading: '基於你的 tag 記憶',
+    shuffleBatch: '⇄ 換一批',
+    shuffleHint: '從快取池洗牌（不消耗配額）',
+    playAll: '▶ 全部播放',
+    close: '關閉 ✕',
+    drawerTitle: '// 搜尋結果',
+    foundCount: '找到 {n} 首',
+    noResults: '找不到結果，試試其他 tag',
+    apiKeyMissing: '請先填入 API Key',
+    tagMissing: '請至少加入一個 tag',
+    apiError: 'API 錯誤：',
+    networkError: '網路錯誤：',
+    quotaExceeded: '已達今日搜尋上限',
+    langLabel: '繁中 / EN'
+  },
+  'en': {
+    appTitle: 'YouTube Music Radar',
+    subtitle: '// Tag a style, follow the latest music',
+    apiKey: 'API Key',
+    musicTags: 'Music Style Tags',
+    tagPlaceholder: 'Enter a music style, press Enter to search',
+    historyHint: '// History — click to add / × to delete',
+    orderBy: 'Order By',
+    orderDate: 'Latest',
+    orderViews: 'Most Viewed',
+    orderRelevance: 'Most Relevant',
+    discoverMode: 'Discovery Mode',
+    discoverSame: 'Same Style',
+    discoverRelated: 'Explore Related',
+    search: 'SEARCH',
+    searching: 'Searching',
+    forYouHeading: 'Based on your tag memory',
+    shuffleBatch: '⇄ Shuffle',
+    shuffleHint: 'Reshuffle from cache (no quota cost)',
+    playAll: '▶ Play All',
+    close: 'Close ✕',
+    drawerTitle: '// Search Results',
+    foundCount: 'Found {n} tracks',
+    noResults: 'No results, try another tag',
+    apiKeyMissing: 'Please enter your API Key first',
+    tagMissing: 'Please add at least one tag',
+    apiError: 'API Error: ',
+    networkError: 'Network Error: ',
+    quotaExceeded: 'Daily search limit reached',
+    langLabel: 'EN / 繁中'
+  }
+};
+
+let currentLang = localStorage.getItem('yt_radar_lang') || 'zh-TW';
+
+function t(key, params) {
+  let str = (I18N[currentLang] && I18N[currentLang][key]) || I18N['zh-TW'][key] || key;
+  if (params) {
+    Object.keys(params).forEach(k => {
+      str = str.replace('{' + k + '}', params[k]);
+    });
+  }
+  return str;
+}
+
+function applyI18n() {
+  // Text content
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    el.textContent = t(key);
+  });
+  // Placeholder
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    el.placeholder = t(el.getAttribute('data-i18n-placeholder'));
+  });
+  // Title attribute
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    el.title = t(el.getAttribute('data-i18n-title'));
+  });
+  // Page title
+  document.title = t('appTitle');
+}
+
+function toggleLangDropdown(event) {
+  if (event) event.stopPropagation();
+  const dropdown = document.getElementById('langDropdown');
+  dropdown.classList.toggle('show');
+  updateLangActiveOption();
+}
+
+function updateLangActiveOption() {
+  document.querySelectorAll('.lang-option').forEach(el => {
+    el.classList.toggle('active', el.dataset.lang === currentLang);
+  });
+}
+
+function setLanguage(lang) {
+  currentLang = lang;
+  localStorage.setItem('yt_radar_lang', currentLang);
+  applyI18n();
+  document.getElementById('langDropdown').classList.remove('show');
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', e => {
+  const sw = document.querySelector('.lang-switcher');
+  if (sw && !sw.contains(e.target)) {
+    const dd = document.getElementById('langDropdown');
+    if (dd) dd.classList.remove('show');
+  }
+});
+
+/* ══ INIT ══ */
+applyI18n();
+const savedKey = localStorage.getItem('yt_radar_key');
+if (savedKey) document.getElementById('apiKey').value = savedKey;
+renderMemory();
+
+// Load For You recommendations (uses 24h cache)
+setTimeout(loadForYou, 100);
+
+/* ── Watch localStorage for changes from Extension (via content-script) ── */
+window.addEventListener('storage', e => {
+  if (e.key === 'yt_radar_mem') {
+    // memoryBank changed externally (e.g., from Extension Popup)
+    try {
+      memoryBank = JSON.parse(e.newValue || '[]');
+      renderMemory();
+
+      // Refresh ForYou: filter out items whose tag was removed
+      const cache = getForYouCache();
+      if (cache && cache.items) {
+        const memSet = new Set(memoryBank);
+        const filtered = cache.items.filter(item => memSet.has(item.sourceTag));
+        if (filtered.length === 0) {
+          localStorage.removeItem(FORYOU_CACHE_KEY);
+          if (memoryBank.length === 0) {
+            const sec = document.getElementById('foryouSection');
+            if (sec) sec.style.display = 'none';
+          }
+        } else {
+          cache.items = filtered;
+          localStorage.setItem(FORYOU_CACHE_KEY, JSON.stringify(cache));
+          const display = pickRandomFromPool(filtered, FORYOU_DISPLAY_COUNT);
+          if (display.length > 0) renderForYou(display, filtered, cache.fetchedAt);
+        }
+      }
+    } catch {}
+  }
+});
+
+// Same-tab polling fallback (the 'storage' event only fires for OTHER tabs;
+// extension content-script writes to same window, so we also poll)
+let _lastSeenMem = JSON.stringify(memoryBank);
+setInterval(() => {
+  const current = localStorage.getItem('yt_radar_mem') || '[]';
+  if (current !== _lastSeenMem) {
+    _lastSeenMem = current;
+    try {
+      const newMem = JSON.parse(current);
+      // Only act if memoryBank actually differs
+      if (JSON.stringify(memoryBank) !== current) {
+        memoryBank = newMem;
+        renderMemory();
+        // Filter ForYou pool
+        const cache = getForYouCache();
+        if (cache && cache.items) {
+          const memSet = new Set(memoryBank);
+          const filtered = cache.items.filter(item => memSet.has(item.sourceTag));
+          if (filtered.length === 0) {
+            localStorage.removeItem(FORYOU_CACHE_KEY);
+            if (memoryBank.length === 0) {
+              const sec = document.getElementById('foryouSection');
+              if (sec) sec.style.display = 'none';
+            }
+          } else {
+            cache.items = filtered;
+            localStorage.setItem(FORYOU_CACHE_KEY, JSON.stringify(cache));
+            const display = pickRandomFromPool(filtered, FORYOU_DISPLAY_COUNT);
+            if (display.length > 0) renderForYou(display, filtered, cache.fetchedAt);
+          }
+        }
+      }
+    } catch {}
+  }
+}, 1500);
+
+/* ══ YOUTUBE API ══ */
+function onYouTubeIframeAPIReady() {
+  ytPlayer = new YT.Player('yt-player-div', {
+    height: '100%', width: '100%',
+    playerVars: { autoplay: 1, rel: 0, modestbranding: 1, iv_load_policy: 3 },
+    events: {
+      onReady: e => {
+        playerReady = true;
+        if (pendingVideoId) { e.target.loadVideoById(pendingVideoId); pendingVideoId = null; }
+      },
+      onStateChange: e => {
+        if (e.data === YT.PlayerState.ENDED && autoplay) handleVideoEnded();
+      },
+      onError: () => { if (autoplay) setTimeout(handleVideoEnded, 800); }
+    }
+  });
+}
+
+function playVideoById(videoId) {
+  if (!playerReady || !ytPlayer) { pendingVideoId = videoId; return; }
+  ytPlayer.loadVideoById(videoId);
+}
+
+/* ══ VIDEO ENDED LOGIC ══ */
+async function handleVideoEnded() {
+  // Single track loop: replay the same video
+  if (loopMode === 'one') {
+    loadVideo(currentIndex);
+    return;
+  }
+
+  const next = currentIndex + 1;
+
+  if (next < queue.length) {
+    // Still have items in queue
+    loadVideo(next);
+  } else {
+    // Queue exhausted
+
+    // Loop all: restart from beginning (no need to fetch more)
+    if (loopMode === 'all') {
+      loadVideo(0);
+      return;
+    }
+
+    // No loop: try to load more or discover
+    showSidebarLoading(true);
+    const loaded = await loadMoreVideos();
+    showSidebarLoading(false);
+
+    if (loaded) {
+      loadVideo(currentIndex + 1);
+    }
+  }
+}
+
+async function loadMoreVideos() {
+  if (isFetching) return false;
+  isFetching = true;
+
+  let query, token;
+
+  if (nextPageToken && discoverPhase <= 1) {
+    // Phase 0-1: same tag, next page
+    query = activeTags.join(' ') + ' music';
+    token = nextPageToken;
+    discoverPhase = 1;
+  } else {
+    // Phase 2+: related discovery
+    discoverPhase = Math.max(2, discoverPhase + 1);
+    query = buildRelatedQuery(activeTags, discoverPhase);
+    token = null;
+    updateDiscoverBadge(true, query);
+  }
+
+  try {
+    const params = new URLSearchParams({
+      part: 'snippet', q: query,
+      type: 'video', order: searchOrder,
+      maxResults: 15, videoCategoryId: '10', videoEmbeddable: 'true', key: apiKey
+    });
+    if (token) params.append('pageToken', token);
+
+    const res = await fetch(`https://www.googleapis.com/youtube/v3/search?${params}`);
+    const data = await res.json();
+
+    if (data.error || !data.items) { isFetching = false; return false; }
+
+    nextPageToken = data.nextPageToken || null;
+
+    // Filter: skip already-played, non-videoId, and non-music content
+    const newItems = filterMusicItems(data.items).filter(
+      item => !playedIds.has(item.id.videoId)
+    );
+
+    if (newItems.length === 0) { isFetching = false; return false; }
+
+    if (shuffle) shuffleArray(newItems);
+
+    const startIdx = queue.length;
+    queue = [...queue, ...newItems];
+    appendSidebarItems(newItems, startIdx);
+
+    isFetching = false;
+    return true;
+  } catch {
+    isFetching = false;
+    return false;
+  }
+}
+
+function updateDiscoverBadge(active, query) {
+  const badge = document.getElementById('discoverBadge');
+  badge.classList.toggle('dim', !active);
+  if (active && query) badge.title = `探索中：${query}`;
+}
+
+/* ══ API KEY ══ */
+function toggleKey() {
+  const inp = document.getElementById('apiKey');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  document.getElementById('eyeIcon').style.opacity = inp.type === 'password' ? '1' : '0.4';
+}
+
+/* ══ TAGS ══ */
+const tagInputEl = document.getElementById('tagInput');
+const autocompleteEl = document.getElementById('autocompleteDropdown');
+let autocompleteHighlightIndex = -1;
+let currentSuggestions = [];
+
+tagInputEl.addEventListener('input', () => {
+  const value = tagInputEl.value.trim();
+  if (value.length === 0) {
+    hideAutocomplete();
+    return;
+  }
+  showAutocomplete(value);
+});
+
+tagInputEl.addEventListener('focus', () => {
+  if (tagInputEl.value.trim().length > 0) {
+    showAutocomplete(tagInputEl.value.trim());
+  }
+});
+
+tagInputEl.addEventListener('blur', () => {
+  // Delay so click on suggestion still works
+  setTimeout(hideAutocomplete, 150);
+});
+
+tagInputEl.addEventListener('keydown', e => {
+  if (autocompleteEl.classList.contains('show')) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      moveAutocompleteHighlight(1);
+      return;
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      moveAutocompleteHighlight(-1);
+      return;
+    } else if (e.key === 'Tab' && autocompleteHighlightIndex >= 0) {
+      e.preventDefault();
+      const sug = currentSuggestions[autocompleteHighlightIndex];
+      if (sug) tagInputEl.value = sug.text;
+      hideAutocomplete();
+      return;
+    } else if (e.key === 'Escape') {
+      hideAutocomplete();
+      return;
+    }
+  }
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (autocompleteHighlightIndex >= 0 && currentSuggestions[autocompleteHighlightIndex]) {
+      // Add highlighted suggestion
+      addActiveTag(currentSuggestions[autocompleteHighlightIndex].text);
+      tagInputEl.value = '';
+      hideAutocomplete();
+    } else {
+      addTagFromInput();
+    }
+  }
+});
+
+/* ── AUTOCOMPLETE LOGIC ── */
+function getSearchHistory() {
+  return JSON.parse(localStorage.getItem('yt_radar_search_history') || '[]');
+}
+
+function addToSearchHistory(text) {
+  const history = getSearchHistory();
+  const existing = history.findIndex(h => h.text.toLowerCase() === text.toLowerCase());
+  if (existing >= 0) {
+    history[existing].count = (history[existing].count || 1) + 1;
+    history[existing].lastUsed = Date.now();
+  } else {
+    history.unshift({ text, count: 1, lastUsed: Date.now() });
+  }
+  // Cap at 100 entries
+  const sorted = history.sort((a, b) => (b.count || 0) - (a.count || 0)).slice(0, 100);
+  localStorage.setItem('yt_radar_search_history', JSON.stringify(sorted));
+}
+
+function deleteFromSearchHistory(text) {
+  const history = getSearchHistory().filter(h => h.text.toLowerCase() !== text.toLowerCase());
+  localStorage.setItem('yt_radar_search_history', JSON.stringify(history));
+}
+
+function showAutocomplete(query) {
+  const queryLower = query.toLowerCase();
+
+  // Build suggestions from: history (with score) + memory bank + presets
+  const history = getSearchHistory();
+  const allSources = [];
+
+  // 1. History matches (sort by count + recency)
+  history.forEach(h => {
+    if (h.text.toLowerCase().includes(queryLower) && h.text.toLowerCase() !== queryLower) {
+      allSources.push({ text: h.text, type: 'history', score: (h.count || 1) * 10 });
+    }
+  });
+
+  // 2. Memory bank matches
+  memoryBank.forEach(t => {
+    if (t.toLowerCase().includes(queryLower) && t.toLowerCase() !== queryLower) {
+      // Skip if already added from history
+      if (!allSources.some(s => s.text.toLowerCase() === t.toLowerCase())) {
+        allSources.push({ text: t, type: 'memory', score: 5 });
+      }
+    }
+  });
+
+  // Sort by score desc, then by string starts-with
+  allSources.sort((a, b) => {
+    const aStarts = a.text.toLowerCase().startsWith(queryLower);
+    const bStarts = b.text.toLowerCase().startsWith(queryLower);
+    if (aStarts && !bStarts) return -1;
+    if (!aStarts && bStarts) return 1;
+    return b.score - a.score;
+  });
+
+  currentSuggestions = allSources.slice(0, 8);
+  autocompleteHighlightIndex = -1;
+
+  if (currentSuggestions.length === 0) {
+    hideAutocomplete();
+    return;
+  }
+
+  renderAutocomplete(query);
+  autocompleteEl.classList.add('show');
+}
+
+function renderAutocomplete(query) {
+  const queryLower = query.toLowerCase();
+  autocompleteEl.innerHTML = currentSuggestions.map((sug, i) => {
+    const idx = sug.text.toLowerCase().indexOf(queryLower);
+    let highlighted = sug.text;
+    if (idx >= 0) {
+      highlighted = esc(sug.text.slice(0, idx)) +
+        '<strong>' + esc(sug.text.slice(idx, idx + query.length)) + '</strong>' +
+        esc(sug.text.slice(idx + query.length));
+    } else {
+      highlighted = esc(sug.text);
+    }
+    const icon = sug.type === 'history' ? '⏱' : sug.type === 'memory' ? '⚡' : '★';
+    const subtitle = sug.type === 'preset' ? ` — ${esc(sug.presetName)}` : '';
+    return `
+      <div class="autocomplete-item ${i === autocompleteHighlightIndex ? 'highlighted' : ''}"
+           data-index="${i}"
+           onmousedown="pickAutocomplete(${i})">
+        <span class="autocomplete-icon">${icon}</span>
+        <span class="autocomplete-text">${highlighted}${subtitle}</span>
+        ${sug.type === 'history' ? `<button class="autocomplete-delete" onmousedown="event.stopPropagation();deleteAutocomplete(${i})" title="從歷史刪除">×</button>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function moveAutocompleteHighlight(direction) {
+  if (currentSuggestions.length === 0) return;
+  autocompleteHighlightIndex += direction;
+  if (autocompleteHighlightIndex < 0) autocompleteHighlightIndex = currentSuggestions.length - 1;
+  if (autocompleteHighlightIndex >= currentSuggestions.length) autocompleteHighlightIndex = 0;
+  renderAutocomplete(tagInputEl.value.trim());
+  // Scroll highlighted into view
+  const el = autocompleteEl.querySelector(`.autocomplete-item[data-index="${autocompleteHighlightIndex}"]`);
+  if (el) el.scrollIntoView({ block: 'nearest' });
+}
+
+function pickAutocomplete(index) {
+  const sug = currentSuggestions[index];
+  if (!sug) return;
+  addActiveTag(sug.text);
+  tagInputEl.value = '';
+  hideAutocomplete();
+  tagInputEl.focus();
+}
+
+function deleteAutocomplete(index) {
+  const sug = currentSuggestions[index];
+  if (!sug) return;
+  if (sug.type === 'history') {
+    deleteFromSearchHistory(sug.text);
+    showAutocomplete(tagInputEl.value.trim());  // re-render
+  }
+}
+
+function hideAutocomplete() {
+  autocompleteEl.classList.remove('show');
+  autocompleteHighlightIndex = -1;
+}
+
+function addTagFromInput() {
+  const val = document.getElementById('tagInput').value.trim();
+  if (val) { addActiveTag(val); document.getElementById('tagInput').value = ''; hideAutocomplete(); }
+}
+
+function addActiveTag(text) {
+  if (activeTags.includes(text)) return;
+  // Single-tag mode: replace existing tag
+  activeTags = [text];
+  const wasEmpty = memoryBank.length === 0;
+  saveMemory(text);
+  addToSearchHistory(text);
+  renderActiveTags();
+  renderMemory();
+  // First time adding a tag → trigger ForYou load
+  if (wasEmpty && memoryBank.length > 0) {
+    setTimeout(loadForYou, 200);
+  }
+}
+
+function removeActiveTag(text) {
+  activeTags = activeTags.filter(t => t !== text);
+  renderActiveTags();
+}
+
+function renderActiveTags() {
+  const wrap = document.getElementById('activeTags');
+  wrap.innerHTML = activeTags.map(t =>
+    `<span class="tag">${esc(t)}<button class="tag-remove" data-tag="${escAttr(t)}">&times;</button></span>`
+  ).join('');
+  // Attach handlers safely (no inline onclick → no quote escaping issues)
+  wrap.querySelectorAll('.tag-remove').forEach(btn => {
+    btn.addEventListener('click', () => removeActiveTag(btn.dataset.tag));
+  });
+
+  // Hide placeholder when there's an active tag (keeps the input clean)
+  const input = document.getElementById('tagInput');
+  if (input) {
+    input.placeholder = activeTags.length > 0 ? '' : t('tagPlaceholder');
+  }
+}
+
+
+/* ══ MEMORY ══ */
+function saveMemory(text) {
+  if (!memoryBank.includes(text)) {
+    memoryBank.unshift(text);
+    if (memoryBank.length > 40) memoryBank = memoryBank.slice(0, 40);
+    localStorage.setItem('yt_radar_mem', JSON.stringify(memoryBank));
+  }
+}
+function deleteMemory(text) {
+  memoryBank = memoryBank.filter(t => t !== text);
+  localStorage.setItem('yt_radar_mem', JSON.stringify(memoryBank));
+  renderMemory();
+
+  // Remove all videos in ForYou pool that came from this tag
+  cleanForYouPoolForTag(text);
+
+  // If memory is now empty, hide the ForYou section entirely
+  if (memoryBank.length === 0) {
+    localStorage.removeItem(FORYOU_CACHE_KEY);
+    const section = document.getElementById('foryouSection');
+    if (section) section.style.display = 'none';
+  }
+}
+
+function cleanForYouPoolForTag(removedTag) {
+  try {
+    const raw = localStorage.getItem(FORYOU_CACHE_KEY);
+    if (!raw) return;
+    const cache = JSON.parse(raw);
+    if (!cache.items) return;
+
+    // Filter out items that came from the removed tag
+    const filtered = cache.items.filter(item => item.sourceTag !== removedTag);
+
+    if (filtered.length === 0) {
+      // Pool became empty → just delete cache
+      localStorage.removeItem(FORYOU_CACHE_KEY);
+    } else {
+      cache.items = filtered;
+      localStorage.setItem(FORYOU_CACHE_KEY, JSON.stringify(cache));
+    }
+
+    // Re-render the ForYou display with the cleaned pool
+    if (memoryBank.length > 0) {
+      const newCache = getForYouCache();
+      if (newCache && newCache.items.length > 0) {
+        const display = pickRandomFromPool(newCache.items, FORYOU_DISPLAY_COUNT);
+        if (display.length > 0) {
+          renderForYou(display, newCache.items, newCache.fetchedAt);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('cleanForYouPoolForTag error:', e);
+  }
+}
+function renderMemory() {
+  const sec = document.getElementById('memorySection');
+  if (memoryBank.length === 0) { sec.style.display = 'none'; return; }
+  sec.style.display = 'block';
+  const wrap = document.getElementById('memoryTags');
+  wrap.innerHTML = memoryBank.map(t =>
+    `<span class="mem-tag">
+      <button class="mem-tag-add" data-tag="${escAttr(t)}">${esc(t)}</button>
+      <button class="mem-tag-del" data-tag="${escAttr(t)}">&times;</button>
+    </span>`
+  ).join('');
+  wrap.querySelectorAll('.mem-tag-add').forEach(btn => {
+    btn.addEventListener('click', () => addActiveTag(btn.dataset.tag));
+  });
+  wrap.querySelectorAll('.mem-tag-del').forEach(btn => {
+    btn.addEventListener('click', () => deleteMemory(btn.dataset.tag));
+  });
+}
+
+/* ══ FOR YOU RECOMMENDATIONS ══ */
+const FORYOU_CACHE_KEY = 'yt_radar_foryou_cache';
+const FORYOU_CACHE_TTL = 24 * 60 * 60 * 1000;  // 24 hours
+const FORYOU_DISPLAY_COUNT = 4;          // show 4 at a time
+const FORYOU_POOL_TARGET = 4;            // fetch 4 fresh per refresh
+const FORYOU_SHUFFLE_COOLDOWN_MS = 30 * 1000;  // 30 seconds
+
+let foryouShuffleCooldownEnd = 0;
+let foryouCooldownTimer = null;
+
+function loadForYou() {
+  const section = document.getElementById('foryouSection');
+
+  if (memoryBank.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+
+  // Try to load from cache (the "pool" of available items)
+  const cache = getForYouCache();
+  if (cache && cache.items && cache.items.length > 0) {
+    // Pick random subset to display from the pool
+    const display = pickRandomFromPool(cache.items, FORYOU_DISPLAY_COUNT);
+    renderForYou(display, cache.items, cache.fetchedAt);
+    return;
+  }
+
+  // No cache → fetch fresh pool
+  fetchForYouPool();
+}
+
+function getForYouCache() {
+  try {
+    const raw = localStorage.getItem(FORYOU_CACHE_KEY);
+    if (!raw) return null;
+    const cache = JSON.parse(raw);
+    if (!cache.fetchedAt) return null;
+    const age = Date.now() - cache.fetchedAt;
+    if (age > FORYOU_CACHE_TTL) return null;
+    return cache;
+  } catch {
+    return null;
+  }
+}
+
+function saveForYouCache(items) {
+  const cache = {
+    items,
+    fetchedAt: Date.now()
+  };
+  localStorage.setItem(FORYOU_CACHE_KEY, JSON.stringify(cache));
+  return cache;
+}
+
+/* Pick N items from pool randomly, filtering out blocked ones AND items whose sourceTag is no longer in memoryBank */
+function pickRandomFromPool(pool, count) {
+  const memSet = new Set(memoryBank);
+  const valid = pool.filter(item =>
+    !blockedVideos.has(item.videoId) &&
+    memSet.has(item.sourceTag)
+  );
+  if (valid.length <= count) return valid;
+  const shuffled = [...valid].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
+
+/* Fetch a fresh pool — costs API quota, only runs when cache expires */
+async function fetchForYouPool() {
+  const apiKey = document.getElementById('apiKey').value.trim() || localStorage.getItem('yt_radar_key');
+  if (!apiKey) {
+    document.getElementById('foryouGrid').innerHTML =
+      '<div class="foryou-empty">// 請先填入 API Key 才能載入推薦</div>';
+    document.getElementById('foryouMeta').textContent = '';
+    return;
+  }
+
+  if (memoryBank.length === 0) return;
+
+  const grid = document.getElementById('foryouGrid');
+  const meta = document.getElementById('foryouMeta');
+
+  grid.innerHTML = '<div class="foryou-loading"><span class="loading-dot">挑選音樂中</span></div>';
+  meta.textContent = '// 首次載入中（會消耗 4 次配額）';
+
+  // Pick up to 4 random tags from memory bank
+  const tagsToFetch = pickRandomTags(memoryBank, FORYOU_POOL_TARGET);
+
+  const results = [];
+  for (const tag of tagsToFetch) {
+    try {
+      const params = new URLSearchParams({
+        part: 'snippet', q: tag + ' music',
+        type: 'video', order: 'relevance',
+        maxResults: 8,
+        videoCategoryId: '10',
+        videoEmbeddable: 'true',
+        key: apiKey
+      });
+      const res = await fetch('https://www.googleapis.com/youtube/v3/search?' + params);
+      const data = await res.json();
+      if (data.error || !data.items?.length) continue;
+
+      const filtered = filterMusicItems(data.items);
+      if (filtered.length === 0) continue;
+
+      // Take all filtered results into pool (gives us more shuffle variety)
+      filtered.forEach(item => {
+        results.push({
+          videoId: item.id.videoId,
+          title: item.snippet.title,
+          channelTitle: item.snippet.channelTitle,
+          channelId: item.snippet.channelId,
+          thumbnail: item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url,
+          sourceTag: tag
+        });
+      });
+    } catch(e) {
+      console.warn('ForYou fetch failed for tag:', tag, e);
+    }
+  }
+
+  if (results.length === 0) {
+    grid.innerHTML = '<div class="foryou-empty">// 暫時沒有結果，稍後再試</div>';
+    meta.textContent = '';
+    return;
+  }
+
+  const cache = saveForYouCache(results);
+  const display = pickRandomFromPool(results, FORYOU_DISPLAY_COUNT);
+  renderForYou(display, results, cache.fetchedAt);
+}
+
+function pickRandomTags(tags, count) {
+  if (tags.length <= count) return [...tags];
+  const shuffled = [...tags].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
+
+function renderForYou(displayItems, poolItems, fetchedAt) {
+  const grid = document.getElementById('foryouGrid');
+  const meta = document.getElementById('foryouMeta');
+
+  const ageMin = Math.floor((Date.now() - fetchedAt) / 60000);
+  let timeLabel = '剛剛更新';
+  if (ageMin >= 60) {
+    const hr = Math.floor(ageMin / 60);
+    timeLabel = `${hr} 小時前更新`;
+  } else if (ageMin >= 1) {
+    timeLabel = `${ageMin} 分鐘前更新`;
+  }
+  const poolSize = poolItems.length;
+  meta.textContent = `// 來自你曾搜尋過的 tag · 池內 ${poolSize} 首 · ${timeLabel}`;
+
+  grid.innerHTML = displayItems.map((item, i) => `
+    <div class="foryou-item" onclick="playForYouItem(${i})" style="animation-delay:${i * 0.06}s">
+      <img class="foryou-thumb" src="${item.thumbnail || ''}" alt="" loading="lazy" onerror="this.style.opacity=0.3">
+      <div class="foryou-info">
+        <div class="foryou-track-title">${esc(item.title)}</div>
+        <span class="foryou-tag-pill">${esc(item.sourceTag)}</span>
+      </div>
+    </div>
+  `).join('');
+
+  window._foryouItems = displayItems;
+  window._foryouPool = poolItems;
+}
+
+function playForYouItem(index) {
+  const item = window._foryouItems?.[index];
+  if (!item) return;
+
+  activeTags = [item.sourceTag];
+  renderActiveTags();
+
+  queue = [{
+    id: { videoId: item.videoId },
+    snippet: {
+      title: item.title,
+      channelTitle: item.channelTitle,
+      channelId: item.channelId || '',
+      thumbnails: { default: { url: item.thumbnail }, medium: { url: item.thumbnail } }
+    }
+  }];
+  playedIds = new Set();
+  nextPageToken = null;
+  discoverPhase = 0;
+
+  openPlayer(0);
+}
+
+/* ── Shuffle: re-pick from pool, NO API call. Has cooldown to prevent spam. ── */
+function shuffleForYou() {
+  // Cooldown check
+  const now = Date.now();
+  if (now < foryouShuffleCooldownEnd) return;
+
+  const cache = getForYouCache();
+  if (!cache || !cache.items || cache.items.length === 0) {
+    // No pool yet → fetch fresh (costs quota)
+    fetchForYouPool();
+    return;
+  }
+
+  // Re-shuffle from pool (free!)
+  const display = pickRandomFromPool(cache.items, FORYOU_DISPLAY_COUNT);
+  if (display.length === 0) {
+    document.getElementById('foryouGrid').innerHTML =
+      '<div class="foryou-empty">// 池內所有歌曲都被封鎖了</div>';
+    return;
+  }
+
+  renderForYou(display, cache.items, cache.fetchedAt);
+
+  // Start cooldown
+  foryouShuffleCooldownEnd = now + FORYOU_SHUFFLE_COOLDOWN_MS;
+  startShuffleCooldown();
+}
+
+function startShuffleCooldown() {
+  const btn = document.getElementById('foryouShuffleBtn');
+  if (!btn) return;
+
+  if (foryouCooldownTimer) clearInterval(foryouCooldownTimer);
+
+  function tick() {
+    const remaining = Math.ceil((foryouShuffleCooldownEnd - Date.now()) / 1000);
+    if (remaining <= 0) {
+      btn.disabled = false;
+      btn.textContent = '⇄ 換一批';
+      btn.title = '從快取池洗牌（不消耗配額）';
+      clearInterval(foryouCooldownTimer);
+      foryouCooldownTimer = null;
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = `⇄ 等 ${remaining}s`;
+    btn.title = `冷卻中，${remaining} 秒後可再次洗牌`;
+  }
+
+  tick();
+  foryouCooldownTimer = setInterval(tick, 1000);
+}
+
+/* ══ SEARCH ══ */
+async function startSearch() {
+  apiKey = document.getElementById('apiKey').value.trim();
+  if (!apiKey) { showStatus(t('apiKeyMissing'), 'error'); return; }
+  if (activeTags.length === 0) { showStatus(t('tagMissing'), 'error'); return; }
+
+  localStorage.setItem('yt_radar_key', apiKey);
+  searchOrder = document.getElementById('orderType').value;
+  discoverMode = document.getElementById('discoverMode').value;
+
+  document.getElementById('searchBtn').disabled = true;
+  showStatus('<span class="loading-dot">' + t('searching') + '</span>', 'loading');
+
+  const query = activeTags.join(' ') + ' music';
+
+  try {
+    const params = new URLSearchParams({
+      part: 'snippet', q: query, type: 'video',
+      order: searchOrder, maxResults: 15, videoCategoryId: '10', videoEmbeddable: 'true', key: apiKey
+    });
+
+    const res = await fetch(`https://www.googleapis.com/youtube/v3/search?${params}`);
+    const data = await res.json();
+
+    if (data.error) {
+      showStatus(t('apiError') + data.error.message, 'error');
+      document.getElementById('searchBtn').disabled = false;
+      return;
+    }
+    if (!data.items?.length) {
+      showStatus(t('noResults'), 'loading');
+      document.getElementById('searchBtn').disabled = false;
+      return;
+    }
+
+    nextPageToken = data.nextPageToken || null;
+    discoverPhase = 0;
+    playedIds = new Set();
+    queue = filterMusicItems(data.items);
+
+    if (queue.length === 0) {
+      showStatus(t('noResults'), 'loading');
+      document.getElementById('searchBtn').disabled = false;
+      return;
+    }
+
+    if (shuffle) shuffleArray(queue);
+
+    showStatus(t('foundCount', { n: queue.length }), 'success');
+    openResultsDrawer();
+  } catch(err) {
+    showStatus(t('networkError') + err.message, 'error');
+  }
+
+  document.getElementById('searchBtn').disabled = false;
+}
+
+/* ══ RESULTS DRAWER ══ */
+function openResultsDrawer() {
+  const drawer = document.getElementById('resultsDrawer');
+  const overlay = document.getElementById('resultsDrawerOverlay');
+  const list = document.getElementById('drawerList');
+  const titleEl = document.getElementById('drawerTitle');
+  const subtitleEl = document.getElementById('drawerSubtitle');
+
+  // Update header
+  titleEl.textContent = t('drawerTitle');
+  const tag = activeTags[0] || '';
+  subtitleEl.textContent = tag ? `${tag} · ${queue.length}` : `${queue.length}`;
+
+  // Render results
+  list.innerHTML = queue.map((item, i) => {
+    const thumb = item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url || '';
+    const title = esc(item.snippet.title);
+    const channel = esc(item.snippet.channelTitle || '');
+    return `
+      <div class="drawer-item" onclick="drawerPlay(${i})">
+        <div class="drawer-num">${String(i + 1).padStart(2, '0')}</div>
+        ${thumb ? `<img class="drawer-thumb" src="${thumb}" alt="" loading="lazy">` : '<div class="drawer-thumb"></div>'}
+        <div class="drawer-info">
+          <div class="drawer-track-title">${title}</div>
+          <div class="drawer-channel">${channel}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  overlay.classList.add('show');
+  drawer.classList.add('show');
+}
+
+function closeResultsDrawer() {
+  document.getElementById('resultsDrawer').classList.remove('show');
+  document.getElementById('resultsDrawerOverlay').classList.remove('show');
+}
+
+function drawerPlay(index) {
+  closeResultsDrawer();
+  openPlayer(index);
+}
+
+function drawerPlayAll() {
+  closeResultsDrawer();
+  openPlayer(0);
+}
+
+// Legacy function — kept for compatibility but no-op now
+function renderResults() {}
+
+/* ══ PLAYER ══ */
+function openPlayer(index) {
+  currentIndex = index;
+  document.getElementById('searchPanel').style.display = 'none';
+  document.getElementById('playerLayout').classList.add('active');
+  renderSidebar();
+  loadVideo(index);
+  setupQuickSearch();
+}
+
+function backToSearch() {
+  if (ytPlayer && playerReady) ytPlayer.stopVideo();
+  document.getElementById('playerLayout').classList.remove('active');
+  document.getElementById('searchPanel').style.display = 'block';
+}
+
+/* ── Quick Search in Player Topbar ── */
+let quickSearchSetup = false;
+let qsPhase = 'suggestions';  // 'suggestions' | 'results'
+let qsResults = [];
+
+function setupQuickSearch() {
+  if (quickSearchSetup) return;
+  quickSearchSetup = true;
+
+  const input = document.getElementById('quickSearchInput');
+  const dropdown = document.getElementById('quickSearchDropdown');
+  if (!input) return;
+
+  let qHighlight = -1;
+  let qSuggestions = [];
+
+  /* ── Phase 1: Tag Suggestions ── */
+  function showTagSuggestions(query) {
+    qsPhase = 'suggestions';
+    if (!query) {
+      // Show recent tags when focused but empty
+      const recent = (JSON.parse(localStorage.getItem('yt_radar_search_history') || '[]'))
+        .slice(0, 6).map(h => ({ text: h.text, source: 'history' }));
+      const memExtra = memoryBank
+        .filter(t => !recent.some(r => r.text.toLowerCase() === t.toLowerCase()))
+        .slice(0, 4).map(t => ({ text: t, source: 'memory' }));
+      qSuggestions = [...recent, ...memExtra].slice(0, 8);
+    } else {
+      const lower = query.toLowerCase();
+      const fromHistory = (JSON.parse(localStorage.getItem('yt_radar_search_history') || '[]'))
+        .filter(h => h.text.toLowerCase().includes(lower) && h.text.toLowerCase() !== lower)
+        .slice(0, 6).map(h => ({ text: h.text, source: 'history' }));
+      const fromMem = memoryBank.filter(t =>
+        t.toLowerCase().includes(lower) && t.toLowerCase() !== lower &&
+        !fromHistory.some(h => h.text.toLowerCase() === t.toLowerCase())
+      ).slice(0, 4).map(t => ({ text: t, source: 'memory' }));
+      qSuggestions = [...fromHistory, ...fromMem].slice(0, 8);
+    }
+    if (qSuggestions.length === 0) { dropdown.classList.remove('show'); return; }
+    qHighlight = -1;
+    dropdown.innerHTML = qSuggestions.map((s, i) => `
+      <div class="autocomplete-item" data-index="${i}">
+        <span>${esc(s.text)}</span>
+        <span class="autocomplete-source">${s.source === 'history' ? '歷史' : '記憶'}</span>
+      </div>
+    `).join('');
+    dropdown.classList.add('show');
+    dropdown.querySelectorAll('.autocomplete-item').forEach(el => {
+      el.addEventListener('mousedown', e => {
+        e.preventDefault();
+        input.value = qSuggestions[parseInt(el.dataset.index)].text;
+        executeQuickSearch(input.value.trim());
+      });
+    });
+  }
+
+  /* ── Input events ── */
+  input.addEventListener('input', () => {
+    const val = input.value.trim();
+    qsPhase = 'suggestions';
+    showTagSuggestions(val);
+  });
+
+  input.addEventListener('focus', () => {
+    if (qsPhase === 'results' && qsResults.length > 0) {
+      dropdown.classList.add('show');
+    } else {
+      showTagSuggestions(input.value.trim());
+    }
+  });
+
+  input.addEventListener('blur', () => {
+    setTimeout(() => {
+      if (qsPhase !== 'results') dropdown.classList.remove('show');
+      else if (!dropdown.matches(':hover')) dropdown.classList.remove('show');
+    }, 200);
+  });
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (qsPhase === 'results' && qHighlight >= 0 && qsResults[qHighlight]) {
+        switchToQuickSearchResult(qHighlight);
+        return;
+      }
+      const val = (qHighlight >= 0 && qSuggestions[qHighlight])
+        ? qSuggestions[qHighlight].text
+        : input.value.trim();
+      if (val) executeQuickSearch(val);
+    } else if (e.key === 'Escape') {
+      dropdown.classList.remove('show');
+      qsPhase = 'suggestions';
+      input.value = '';
+      input.blur();
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const list = qsPhase === 'results' ? qsResults : qSuggestions;
+      if (list.length === 0) return;
+      qHighlight = (qHighlight + 1) % list.length;
+      updateQHighlight();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const list = qsPhase === 'results' ? qsResults : qSuggestions;
+      if (list.length === 0) return;
+      qHighlight = qHighlight <= 0 ? list.length - 1 : qHighlight - 1;
+      updateQHighlight();
+    }
+  });
+
+  function updateQHighlight() {
+    dropdown.querySelectorAll('.autocomplete-item').forEach((el, i) => {
+      el.classList.toggle('highlight', i === qHighlight);
+    });
+    // Scroll highlighted item into view
+    const highlighted = dropdown.querySelector('.highlight');
+    if (highlighted) highlighted.scrollIntoView({ block: 'nearest' });
+  }
+}
+
+/* ── Phase 2: Show search results in dropdown ── */
+function showSearchResults(items) {
+  const dropdown = document.getElementById('quickSearchDropdown');
+  qsPhase = 'results';
+  qsResults = items;
+  dropdown.innerHTML =
+    `<div class="qs-results-header">// ${items.length} 首 · 點選立即換台</div>` +
+    items.map((item, i) => {
+      const thumb = item.snippet.thumbnails?.default?.url || '';
+      return `
+        <div class="qs-result-item autocomplete-item" data-index="${i}">
+          ${thumb ? `<img class="qs-thumb" src="${thumb}" alt="" loading="lazy">` : '<div class="qs-thumb-ph"></div>'}
+          <div class="qs-info">
+            <div class="qs-title">${esc(item.snippet.title)}</div>
+            <div class="qs-ch">${esc(item.snippet.channelTitle || '')}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  dropdown.classList.add('show');
+  dropdown.querySelectorAll('.qs-result-item').forEach(el => {
+    el.addEventListener('mousedown', e => {
+      e.preventDefault();
+      switchToQuickSearchResult(parseInt(el.dataset.index));
+    });
+  });
+}
+
+/* ── Execute Quick Search: fetch results then show dropdown ── */
+async function executeQuickSearch(tag) {
+  if (!tag) return;
+  const input = document.getElementById('quickSearchInput');
+  const dropdown = document.getElementById('quickSearchDropdown');
+  const apiKey = document.getElementById('apiKey').value.trim() || localStorage.getItem('yt_radar_key');
+  if (!apiKey) {
+    showToast('請先填入 API Key');
+    return;
+  }
+
+  // Remember the tag for after input is cleared
+  input.dataset.lastTag = tag;
+  dropdown.innerHTML = '<div class="qs-results-header"><span class="loading-dot">搜尋中</span></div>';
+  dropdown.classList.add('show');
+  qsPhase = 'results';
+
+  try {
+    const params = new URLSearchParams({
+      part: 'snippet', q: tag + ' music',
+      type: 'video', order: 'relevance',
+      maxResults: 15, videoCategoryId: '10',
+      videoEmbeddable: 'true', key: apiKey
+    });
+    const res = await fetch('https://www.googleapis.com/youtube/v3/search?' + params);
+    const data = await res.json();
+
+    if (data.error || !data.items?.length) {
+      dropdown.innerHTML = '<div class="qs-results-header">// 找不到結果</div>';
+      return;
+    }
+
+    const items = filterMusicItems(data.items);
+    if (items.length === 0) {
+      dropdown.innerHTML = '<div class="qs-results-header">// 結果都被過濾掉了</div>';
+      return;
+    }
+
+    // Save to search history
+    saveMemory(tag);
+    addToSearchHistory(tag);
+
+    showSearchResults(items);
+  } catch(e) {
+    dropdown.innerHTML = `<div class="qs-results-header">// 錯誤：${esc(e.message)}</div>`;
+  }
+}
+
+/* ── Switch to result: replace entire queue (換台) ── */
+function switchToQuickSearchResult(index) {
+  const item = qsResults[index];
+  if (!item) return;
+
+  const input = document.getElementById('quickSearchInput');
+  const dropdown = document.getElementById('quickSearchDropdown');
+
+  // Close dropdown, clear input
+  dropdown.classList.remove('show');
+  qsPhase = 'suggestions';
+  input.value = '';
+
+  // Update search tag
+  const tag = input.dataset.lastTag || activeTags[0] || '';
+  activeTags = [tag];
+  renderActiveTags();
+  renderMemory();
+
+  // Replace entire queue with search results starting from selected
+  const reordered = [
+    ...qsResults.slice(index),
+    ...qsResults.slice(0, index)
+  ];
+
+  queue = reordered;
+  playedIds = new Set();
+  nextPageToken = null;
+  discoverPhase = 0;
+  currentIndex = 0;
+
+  renderSidebar();
+  loadVideo(0);
+  showToast(`已換台：${item.snippet.title.slice(0, 30)}...`);
+}
+
+function loadVideo(index) {
+  if (index < 0 || index >= queue.length) return;
+  const item = queue[index];
+  currentIndex = index;
+  playedIds.add(item.id.videoId);
+
+  document.getElementById('nowPlayingTitle').textContent = item.snippet.title;
+  playVideoById(item.id.videoId);
+  updateSidebarActive();
+
+  const el = document.getElementById(`sid-${index}`);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function renderSidebar() {
+  const list = document.getElementById('sidebarList');
+  list.innerHTML = queue.map((item, i) => sidebarItemHTML(item, i)).join('');
+  ensureSidebarFooter();
+  setupScrollSentinel();
+}
+
+function ensureSidebarFooter() {
+  const list = document.getElementById('sidebarList');
+
+  // Remove old footer if present
+  list.querySelectorAll('.scroll-sentinel, .explore-more-btn, .load-more-btn, .list-end-msg').forEach(el => el.remove());
+
+  // Don't add footer if loop mode is on (we don't want to load more)
+  if (loopMode === 'all' || loopMode === 'one') return;
+
+  // Manual "Load More" button — same query, next page
+  const loadMoreBtn = document.createElement('button');
+  loadMoreBtn.className = 'load-more-btn';
+  loadMoreBtn.id = 'loadMoreBtn';
+  loadMoreBtn.textContent = '▼ 載入更多';
+  loadMoreBtn.title = '繼續抓同 tag 的下一批音樂（消耗 1 次配額）';
+  loadMoreBtn.addEventListener('click', manualLoadMore);
+  list.appendChild(loadMoreBtn);
+
+  // Manual "Explore New Style" button — jumps to discovery phase
+  const exploreBtn = document.createElement('button');
+  exploreBtn.className = 'explore-more-btn';
+  exploreBtn.id = 'exploreMoreBtn';
+  exploreBtn.textContent = '+ 探索新風格';
+  exploreBtn.title = '跳到下一個探索階段，發現相關但不同的音樂';
+  exploreBtn.addEventListener('click', manualExplore);
+  list.appendChild(exploreBtn);
+}
+
+function sidebarItemHTML(item, i) {
+  const thumb = item.snippet.thumbnails?.default?.url || '';
+  const title = esc(item.snippet.title);
+  const channel = esc(item.snippet.channelTitle || '');
+  const isPlayed = playedIds.has(item.id.videoId) && i !== currentIndex;
+  return `
+    <div class="sidebar-item ${i === currentIndex ? 'active' : ''} ${isPlayed ? 'played' : ''}" id="sid-${i}" onclick="loadVideo(${i})">
+      ${thumb ? `<img class="sidebar-thumb" src="${thumb}" alt="" loading="lazy">` : `<div class="sidebar-thumb" style="display:flex;align-items:center;justify-content:center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#444" stroke-width="1.5"><polygon points="5,3 19,12 5,21"/></svg></div>`}
+      <div class="sidebar-info" style="padding-right:24px;">
+        <div class="sidebar-title-text">${title}</div>
+        <div class="sidebar-ch">${channel}</div>
+      </div>
+      <button class="sid-menu-btn" onclick="openSidebarMenu(event, ${i})" title="更多選項">⋯</button>
+    </div>
+  `;
+}
+
+function appendSidebarItems(newItems, startIdx) {
+  const list = document.getElementById('sidebarList');
+  // Remove footer elements before appending new items
+  list.querySelectorAll('.loading-more, .scroll-sentinel, .explore-more-btn, .list-end-msg').forEach(el => el.remove());
+  newItems.forEach((item, i) => {
+    list.insertAdjacentHTML('beforeend', sidebarItemHTML(item, startIdx + i));
+  });
+  ensureSidebarFooter();
+  setupScrollSentinel();
+}
+
+function updateSidebarActive() {
+  document.querySelectorAll('.sidebar-item').forEach((el, i) => {
+    el.classList.toggle('active', i === currentIndex);
+    el.classList.toggle('played', playedIds.has(queue[i]?.id?.videoId) && i !== currentIndex);
+  });
+}
+
+function showSidebarLoading(show) {
+  const list = document.getElementById('sidebarList');
+  let el = list.querySelector('.loading-more');
+  if (show && !el) {
+    // Insert before any sentinel/explore-btn so it appears between items and footer
+    const footer = list.querySelector('.scroll-sentinel, .explore-more-btn, .list-end-msg');
+    const html = `<div class="loading-more"><span class="loading-dot">載入更多</span></div>`;
+    if (footer) {
+      footer.insertAdjacentHTML('beforebegin', html);
+    } else {
+      list.insertAdjacentHTML('beforeend', html);
+    }
+  } else if (!show && el) {
+    el.remove();
+  }
+}
+
+/* ── Manual Load More (no auto-trigger) ── */
+function setupScrollSentinel() {
+  // Disabled: now using manual buttons only
+  if (scrollObserver) {
+    scrollObserver.disconnect();
+    scrollObserver = null;
+  }
+}
+
+async function manualLoadMore() {
+  if (isFetching) return;
+  const btn = document.getElementById('loadMoreBtn');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '載入中...';
+  }
+  showSidebarLoading(true);
+  const loaded = await loadMoreVideos();
+  showSidebarLoading(false);
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = '▼ 載入更多';
+  }
+  if (!loaded) {
+    showStatus('暫時找不到更多結果', 'info');
+  }
+}
+
+async function manualExplore() {
+  if (isFetching) return;
+
+  const btn = document.getElementById('exploreMoreBtn');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '探索中...';
+  }
+
+  // Force jump to next discovery phase
+  discoverPhase = Math.max(2, discoverPhase + 1);
+  nextPageToken = null;  // skip pagination, go straight to related discovery
+
+  showSidebarLoading(true);
+  const loaded = await loadMoreVideos();
+  showSidebarLoading(false);
+
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = '+ 探索新風格';
+  }
+
+  if (!loaded) {
+    showStatus('暫時找不到更多相關內容', 'info');
+  }
+}
+
+/* ══ CONTROLS ══ */
+function toggleAutoplay() {
+  autoplay = !autoplay;
+  const btn = document.getElementById('autoplayBtn');
+  const badge = document.getElementById('modeBadge');
+  btn.classList.toggle('on', autoplay);
+  badge.classList.toggle('dim', !autoplay);
+}
+
+/* Loop cycles: off → all → one → off */
+function toggleLoop() {
+  if (loopMode === 'off') loopMode = 'all';
+  else if (loopMode === 'all') loopMode = 'one';
+  else loopMode = 'off';
+
+  const btn = document.getElementById('loopBtn');
+  const badge = document.getElementById('loopBadge');
+
+  if (loopMode === 'off') {
+    btn.textContent = '↻ 關';
+    btn.classList.remove('on');
+    badge.classList.add('dim');
+    badge.textContent = 'LOOP';
+  } else if (loopMode === 'all') {
+    btn.textContent = '↻ 全部';
+    btn.classList.add('on');
+    badge.classList.remove('dim');
+    badge.textContent = 'LOOP ALL';
+  } else {
+    btn.textContent = '↻ 單曲';
+    btn.classList.add('on');
+    badge.classList.remove('dim');
+    badge.textContent = 'LOOP 1';
+  }
+
+  // Refresh sidebar footer (hide load-more when looping)
+  ensureSidebarFooter();
+  setupScrollSentinel();
+}
+
+function toggleShuffle() {
+  shuffle = !shuffle;
+  const btn = document.getElementById('shuffleBtn');
+  const badge = document.getElementById('shuffleBadge');
+  btn.classList.toggle('on', shuffle);
+  badge.classList.toggle('dim', !shuffle);
+
+  if (shuffle) {
+    // Shuffle remaining unplayed items from currentIndex+1 onward
+    const played = queue.slice(0, currentIndex + 1);
+    const remaining = queue.slice(currentIndex + 1);
+    shuffleArray(remaining);
+    queue = [...played, ...remaining];
+    renderSidebar();
+    updateSidebarActive();
+  }
+}
+
+/* ══ UTILS ══ */
+function shuffleArray(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
+function showStatus(html, type) {
+  const el = document.getElementById('status');
+  el.style.display = 'block'; el.className = type; el.innerHTML = html;
+}
+
+function decodeHTML(str) {
+  // Decode HTML entities that YouTube API sometimes pre-encodes in titles
+  const txt = document.createElement('textarea');
+  txt.innerHTML = str;
+  return txt.value;
+}
+
+function esc(str) {
+  // First decode any pre-encoded HTML entities (e.g. &#39; → ')
+  // then re-encode only the dangerous characters for safe innerHTML insertion
+  return String(decodeHTML(str))
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// For use inside HTML attribute values that use single quotes
+function escAttr(str) {
+  return String(decodeHTML(str))
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.activeElement.id !== 'tagInput') startSearch();
+});
+
+/* ══ TAG-BASED RECOMMENDATIONS ══ */
+const REC_CACHE_KEY = 'yt_radar_rec_cache';
+const REC_DATE_KEY = 'yt_radar_rec_date';
+const REC_COUNT = 8;
+
+function getTodayDateString() {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
+}
+
+function loadRecommendations() {
+  // Check if we have memoryBank
+  const memory = JSON.parse(localStorage.getItem('yt_radar_memory') || '[]');
+  if (memory.length === 0) return;  // No history, no recommendations
+
+  // Try cached first
+  const cached = JSON.parse(localStorage.getItem(REC_CACHE_KEY) || 'null');
+  const cachedDate = localStorage.getItem(REC_DATE_KEY);
+  const today = getTodayDateString();
+
+  if (cached && cachedDate === today && cached.length > 0) {
+    // Use cache
+    renderRecommendations(cached, true);
+    return;
+  }
+
+  // No cache or expired — generate new (only if API key available)
+  const apiKey = (document.getElementById('apiKey').value || localStorage.getItem('yt_radar_key') || '').trim();
+  if (!apiKey) {
+    // No API key yet — show placeholder
+    return;
+  }
+
+  generateRecommendations(apiKey, memory);
+}
+
+async function generateRecommendations(apiKey, memory, isManualShuffle) {
+  // Pick up to 8 random tags from memory
+  const tagsPool = [...memory];
+  shuffleArray(tagsPool);
+  const selectedTags = tagsPool.slice(0, REC_COUNT);
+
+  // Show loading state
+  document.getElementById('recommendationsSection').style.display = 'block';
+  document.getElementById('recTagDisplay').textContent = `${selectedTags.length} 種風格`;
+  showRecLoading(selectedTags.length);
+  document.getElementById('recShuffleBtn').disabled = true;
+
+  // Fetch one video per tag (parallel)
+  const fetches = selectedTags.map(tag => fetchOneRecVideo(apiKey, tag));
+  const results = await Promise.allSettled(fetches);
+
+  const recs = [];
+  results.forEach((r, i) => {
+    if (r.status === 'fulfilled' && r.value) {
+      recs.push({ ...r.value, tag: selectedTags[i] });
+    }
+  });
+
+  document.getElementById('recShuffleBtn').disabled = false;
+
+  if (recs.length === 0) {
+    document.getElementById('recommendationsSection').style.display = 'none';
+    return;
+  }
+
+  // Cache today's batch
+  localStorage.setItem(REC_CACHE_KEY, JSON.stringify(recs));
+  localStorage.setItem(REC_DATE_KEY, getTodayDateString());
+
+  renderRecommendations(recs, false);
+}
+
+async function fetchOneRecVideo(apiKey, tag) {
+  try {
+    const params = new URLSearchParams({
+      part: 'snippet',
+      q: tag + ' music',
+      type: 'video',
+      order: 'relevance',
+      maxResults: 5,  // get a few options to pick from
+      videoCategoryId: '10',
+      videoEmbeddable: 'true',
+      key: apiKey
+    });
+    const res = await fetch('https://www.googleapis.com/youtube/v3/search?' + params);
+    const data = await res.json();
+    if (data.error || !data.items?.length) return null;
+
+    // Apply same filter (skip non-music & blocked)
+    const filtered = data.items.filter(item => {
+      if (!item.id?.videoId) return false;
+      const title = item.snippet?.title || '';
+      const channelId = item.snippet?.channelId || '';
+      if (blockedVideos.has(item.id.videoId)) return false;
+      if (blockedChannels.has(channelId)) return false;
+      return !isNonMusicContent(title);
+    });
+
+    if (filtered.length === 0) return null;
+    // Pick a random one from the top results for variety
+    return filtered[Math.floor(Math.random() * filtered.length)];
+  } catch {
+    return null;
+  }
+}
+
+function showRecLoading(count) {
+  const grid = document.getElementById('recGrid');
+  grid.innerHTML = Array.from({length: count}, () =>
+    '<div class="rec-loading-card"></div>'
+  ).join('');
+  document.getElementById('recMeta').textContent = '// 載入中...';
+}
+
+function renderRecommendations(recs, fromCache) {
+  const grid = document.getElementById('recGrid');
+  const section = document.getElementById('recommendationsSection');
+  const meta = document.getElementById('recMeta');
+  const tagDisplay = document.getElementById('recTagDisplay');
+
+  section.style.display = 'block';
+  tagDisplay.textContent = `${recs.length} 種風格`;
+
+  grid.innerHTML = recs.map((r, i) => {
+    const thumb = r.snippet.thumbnails?.medium?.url || r.snippet.thumbnails?.default?.url || '';
+    const title = esc(r.snippet.title);
+    const tag = esc(r.tag || '');
+    return `
+      <div class="rec-card" onclick="playRecommendation('${r.id.videoId}', ${i})">
+        <img class="rec-thumb" src="${thumb}" alt="" loading="lazy" />
+        <div class="rec-info">
+          <div class="rec-title">${title}</div>
+          <span class="rec-tag-chip">#${tag}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  meta.innerHTML = fromCache
+    ? '// 今日推薦（每天午夜更新）'
+    : '// 剛剛生成';
+}
+
+async function shuffleRecommendations() {
+  const apiKey = (document.getElementById('apiKey').value || localStorage.getItem('yt_radar_key') || '').trim();
+  if (!apiKey) {
+    showStatus('請先填入 API Key', 'error');
+    return;
+  }
+
+  const memory = JSON.parse(localStorage.getItem('yt_radar_memory') || '[]');
+  if (memory.length === 0) {
+    showStatus('還沒有 tag 紀錄，先搜尋一些音樂吧', 'error');
+    return;
+  }
+
+  // Force regenerate (overwrites today's cache)
+  await generateRecommendations(apiKey, memory, true);
+}
+
+/* When user clicks a recommendation, treat it like a single-tag search */
+async function playRecommendation(videoId, index) {
+  // Get the rec data
+  const cached = JSON.parse(localStorage.getItem(REC_CACHE_KEY) || '[]');
+  const rec = cached[index];
+  if (!rec) return;
+
+  const apiKey = (document.getElementById('apiKey').value || localStorage.getItem('yt_radar_key') || '').trim();
+  if (!apiKey) {
+    showStatus('請先填入 API Key', 'error');
+    return;
+  }
+
+  // Set tag and start search
+  activeTags = [rec.tag];
+  renderActiveTags();
+
+  showStatus('<span class="loading-dot">載入中</span>', 'loading');
+
+  // Run a search using just this tag
+  await startSearch();
+
+  // Find the rec video in the queue if present, else add it at front
+  const idx = queue.findIndex(item => item.id?.videoId === videoId);
+  if (idx >= 0) {
+    openPlayer(idx);
+  } else {
+    // Insert the rec at the start of the queue and play it
+    queue.unshift(rec);
+    openPlayer(0);
+  }
+}
+
+
+(function() {
+  const p = new URLSearchParams(location.search);
+  const tags = p.get('tags');
+  const apiKey = p.get('apiKey');
+  const orderType = p.get('orderType');
+  const startIndexRaw = p.get('startIndex');
+
+  if (!tags && !apiKey) return;
+
+  // Inject API key
+  if (apiKey) {
+    document.getElementById('apiKey').value = apiKey;
+    localStorage.setItem('yt_radar_key', apiKey);
+  }
+
+  // Inject order
+  if (orderType) {
+    const sel = document.getElementById('orderType');
+    if (sel) sel.value = orderType;
+  }
+
+  // Inject tags
+  if (tags) {
+    tags.split(',').filter(Boolean).forEach(t => addActiveTag(t));
+  }
+
+  // Only auto-search & auto-play when Popup explicitly passed startIndex
+  // (which means user clicked a specific song to play)
+  if (tags && apiKey && startIndexRaw !== null) {
+    const startIndex = parseInt(startIndexRaw, 10) || 0;
+    setTimeout(async () => {
+      await startSearch();
+      if (queue && queue.length > startIndex) {
+        // Clean URL so back button returns to search page (not auto-play again)
+        history.replaceState(null, '', location.pathname);
+        openPlayer(startIndex);
+      }
+    }, 400);
+  }
+  // If no startIndex → user hit "搜尋" in popup, just pre-fill the form
+  // and let them browse / click search themselves on this page if they want
+})();
+</script>
+
+<!-- Action menu (popup, dynamically positioned) -->
+<div class="action-menu" id="actionMenu" style="display:none;"></div>
+
+<!-- Blocklist manager modal -->
+<div class="modal-overlay" id="blocklistModal">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">// 黑名單管理</span>
+      <button class="modal-close" onclick="closeBlocklistManager()">關閉 ✕</button>
+    </div>
+    <div class="modal-tabs">
+      <button class="modal-tab active" data-tab="videos" onclick="switchBlocklistTab('videos')">影片</button>
+      <button class="modal-tab" data-tab="channels" onclick="switchBlocklistTab('channels')">頻道</button>
+    </div>
+    <div class="modal-body" id="blocklistBody"></div>
+    <div class="modal-footer">
+      <div class="io-btns">
+        <button class="io-btn" onclick="exportBlocklist()">⬇ 匯出</button>
+        <button class="io-btn" onclick="document.getElementById('importFile').click()">⬆ 匯入</button>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importBlocklist(event)" />
+      </div>
+      <button class="io-btn" onclick="clearBlocklist()" style="color:#ff8a8a;">清空全部</button>
+    </div>
+  </div>
+</div>
+
+<!-- Favorites manager modal -->
+<div class="modal-overlay" id="favoritesModal">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">// 我的收藏</span>
+      <button class="modal-close" onclick="closeFavoritesManager()">關閉 ✕</button>
+    </div>
+    <div class="modal-body" id="favoritesBody"></div>
+    <div class="modal-footer">
+      <div class="io-btns">
+        <button class="io-btn" onclick="exportFavorites()">⬇ 匯出</button>
+        <button class="io-btn" onclick="document.getElementById('importFavFile').click()">⬆ 匯入</button>
+        <input type="file" id="importFavFile" accept=".json" style="display:none" onchange="importFavorites(event)" />
+        <button class="io-btn" onclick="playAllFavorites()" style="color:#ff2d2d;border-color:rgba(255,45,45,0.4);">▶ 全部播放</button>
+      </div>
+      <button class="io-btn" onclick="clearFavorites()" style="color:#ff8a8a;">清空全部</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast notification -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ══ ACTION MENU ══ */
+let currentMenuItem = null;
+let currentMenuTriggerIndex = null;
+
+function openSidebarMenu(event, index) {
+  event.stopPropagation();
+  event.preventDefault();
+
+  const menu = document.getElementById('actionMenu');
+
+  // If menu is already open for THIS same item → close it (toggle behavior)
+  if (menu.style.display === 'block' && currentMenuTriggerIndex === index) {
+    closeMenu();
+    return;
+  }
+
+  const item = queue[index];
+  if (!item) return;
+  currentMenuItem = item;
+  currentMenuTriggerIndex = index;
+
+  const favLabel = isFavorite(item.id.videoId) ? '☆ 取消收藏' : '★ 收藏';
+  const favAction = isFavorite(item.id.videoId) ? 'unbookmarkCurrent' : 'bookmarkCurrent';
+  menu.innerHTML = `
+    <button class="action-item" onclick="${favAction}()">
+      ${favLabel}
+    </button>
+    <button class="action-item" onclick="openOnYouTube('${item.id.videoId}')">
+      🔗 在 YouTube 開啟
+    </button>
+    <div class="action-divider"></div>
+    <button class="action-item danger" onclick="blockCurrentVideo()">
+      🚫 封鎖此影片
+    </button>
+    <button class="action-item danger" onclick="blockCurrentChannel()">
+      🚷 封鎖整個頻道
+    </button>
+    <div class="action-divider"></div>
+    <button class="action-item action-cancel" onclick="closeMenu()">
+      取消
+    </button>
+  `;
+
+  // Position the menu near the button
+  const btn = event.currentTarget;
+  const rect = btn.getBoundingClientRect();
+  menu.style.display = 'block';
+
+  const menuWidth = 200;
+  let left = rect.left - menuWidth - 4;
+  if (left < 8) left = rect.right + 4;
+  let top = rect.top;
+
+  setTimeout(() => {
+    const menuRect = menu.getBoundingClientRect();
+    if (top + menuRect.height > window.innerHeight - 8) {
+      top = window.innerHeight - menuRect.height - 8;
+    }
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+  }, 0);
+}
+
+function closeMenu() {
+  document.getElementById('actionMenu').style.display = 'none';
+  currentMenuItem = null;
+  currentMenuTriggerIndex = null;
+}
+
+document.addEventListener('click', e => {
+  const menu = document.getElementById('actionMenu');
+  if (menu.style.display === 'block' && !menu.contains(e.target) && !e.target.classList.contains('sid-menu-btn')) {
+    closeMenu();
+  }
+});
+
+function blockCurrentVideo() {
+  if (!currentMenuItem) return;
+  blockVideo(currentMenuItem.id.videoId, currentMenuItem.snippet.title);
+  closeMenu();
+}
+
+function blockCurrentChannel() {
+  if (!currentMenuItem) return;
+  blockChannel(currentMenuItem.snippet.channelId, currentMenuItem.snippet.channelTitle);
+  closeMenu();
+}
+
+function bookmarkCurrent() {
+  if (!currentMenuItem) return;
+  addToFavorites(currentMenuItem);
+  closeMenu();
+}
+
+function unbookmarkCurrent() {
+  if (!currentMenuItem) return;
+  removeFromFavorites(currentMenuItem.id.videoId);
+  showToast('♡ 已從最愛移除');
+  closeMenu();
+}
+
+function openOnYouTube(videoId) {
+  window.open('https://www.youtube.com/watch?v=' + videoId, '_blank');
+  closeMenu();
+}
+
+/* ══ TOAST ══ */
+let toastTimer = null;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+/* ══ BLOCKLIST MANAGER ══ */
+let activeBlocklistTab = 'videos';
+
+function openBlocklistManager() {
+  activeBlocklistTab = 'videos';
+  document.querySelectorAll('.modal-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.tab === 'videos')
+  );
+  document.getElementById('blocklistModal').classList.add('show');
+  renderBlocklistManager();
+}
+
+function closeBlocklistManager() {
+  document.getElementById('blocklistModal').classList.remove('show');
+}
+
+function switchBlocklistTab(tab) {
+  activeBlocklistTab = tab;
+  document.querySelectorAll('.modal-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.tab === tab)
+  );
+  renderBlocklistManager();
+}
+
+function renderBlocklistManager() {
+  const body = document.getElementById('blocklistBody');
+
+  if (activeBlocklistTab === 'videos') {
+    const ids = [...blockedVideos];
+    if (ids.length === 0) {
+      body.innerHTML = '<div class="blocklist-empty">// 沒有封鎖任何影片</div>';
+      return;
+    }
+    body.innerHTML = ids.map(id => `
+      <div class="block-item" data-id="${id}">
+        <img class="block-thumb" src="https://i.ytimg.com/vi/${id}/default.jpg" onerror="this.style.opacity=0.3" />
+        <div class="block-info">
+          <div class="block-title">影片 ID：${id}</div>
+          <div class="block-sub">點縮圖在 YouTube 確認</div>
+        </div>
+        <button class="unblock-btn" onclick="unblockVideo('${id}')">解封</button>
+      </div>
+    `).join('');
+    // Make thumbnails clickable
+    body.querySelectorAll('.block-thumb').forEach(img => {
+      img.style.cursor = 'pointer';
+      img.addEventListener('click', () => {
+        const id = img.closest('.block-item').dataset.id;
+        window.open('https://www.youtube.com/watch?v=' + id, '_blank');
+      });
+    });
+  } else {
+    const ids = [...blockedChannels];
+    if (ids.length === 0) {
+      body.innerHTML = '<div class="blocklist-empty">// 沒有封鎖任何頻道</div>';
+      return;
+    }
+    body.innerHTML = ids.map(id => `
+      <div class="block-item">
+        <div class="block-thumb" style="display:flex;align-items:center;justify-content:center;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.5">
+            <circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.5 3.5-8 8-8s8 3.5 8 8"/>
+          </svg>
+        </div>
+        <div class="block-info">
+          <div class="block-title">${esc(blockedChannelNames[id] || '未知頻道')}</div>
+          <div class="block-sub">${id}</div>
+        </div>
+        <button class="unblock-btn" onclick="unblockChannel('${id}')">解封</button>
+      </div>
+    `).join('');
+  }
+}
+
+function clearBlocklist() {
+  if (!confirm('確定要清空所有封鎖紀錄嗎？這個動作無法復原。')) return;
+  blockedVideos.clear();
+  blockedChannels.clear();
+  blockedChannelNames = {};
+  saveBlocklist();
+  renderBlocklistManager();
+  showToast('已清空黑名單');
+}
+
+/* ══ FAVORITES MANAGER ══ */
+function openFavoritesManager() {
+  document.getElementById('favoritesModal').classList.add('show');
+  renderFavoritesManager();
+}
+
+function closeFavoritesManager() {
+  document.getElementById('favoritesModal').classList.remove('show');
+}
+
+function renderFavoritesManager() {
+  const body = document.getElementById('favoritesBody');
+  if (favorites.length === 0) {
+    body.innerHTML = '<div class="blocklist-empty">// 還沒有最愛 — 在播放清單點 ⋯ 加入</div>';
+    return;
+  }
+  body.innerHTML = favorites.map((f, i) => `
+    <div class="block-item">
+      <img class="block-thumb" src="${f.thumbnail || ''}" onerror="this.style.opacity=0.3" style="cursor:pointer" data-vid="${f.videoId}" />
+      <div class="block-info" style="cursor:pointer" data-play-idx="${i}">
+        <div class="block-title">${esc(f.title)}</div>
+        <div class="block-sub">${esc(f.channelTitle || '')}</div>
+      </div>
+      <button class="unblock-btn" onclick="playFavorite(${i})" style="border-color:rgba(255,45,45,0.4);color:var(--red);">▶ 播放</button>
+      <button class="unblock-btn" onclick="removeFromFavorites('${escAttr(f.videoId)}')">移除</button>
+    </div>
+  `).join('');
+
+  // Click thumb → open in YouTube
+  body.querySelectorAll('.block-thumb').forEach(img => {
+    img.addEventListener('click', () => {
+      window.open('https://www.youtube.com/watch?v=' + img.dataset.vid, '_blank');
+    });
+  });
+
+  // Click info → play
+  body.querySelectorAll('[data-play-idx]').forEach(el => {
+    el.addEventListener('click', () => playFavorite(parseInt(el.dataset.playIdx)));
+  });
+}
+
+function playFavorite(index) {
+  const f = favorites[index];
+  if (!f) return;
+
+  // Build queue with all favorites starting from this one
+  const ordered = [...favorites.slice(index), ...favorites.slice(0, index)];
+  queue = ordered.map(fav => ({
+    id: { videoId: fav.videoId },
+    snippet: {
+      title: fav.title,
+      channelTitle: fav.channelTitle,
+      channelId: fav.channelId,
+      thumbnails: { default: { url: fav.thumbnail }, medium: { url: fav.thumbnail } }
+    }
+  }));
+  playedIds = new Set();
+  nextPageToken = null;
+  discoverPhase = 0;
+  activeTags = ['★ 我的收藏'];
+  renderActiveTags();
+
+  closeFavoritesManager();
+
+  // If already in player, just load this video
+  if (document.getElementById('playerLayout').classList.contains('active')) {
+    currentIndex = 0;
+    renderSidebar();
+    loadVideo(0);
+  } else {
+    openPlayer(0);
+  }
+}
+
+function playAllFavorites() {
+  if (favorites.length === 0) {
+    showToast('最愛清單是空的');
+    return;
+  }
+  playFavorite(0);
+}
+
+function clearFavorites() {
+  if (!confirm('確定要清空所有最愛嗎？這個動作無法復原。')) return;
+  favorites = [];
+  saveFavorites();
+  renderFavoritesManager();
+  showToast('已清空最愛');
+}
+
+function exportFavorites() {
+  const data = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    favorites
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `music-radar-favorites-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('已匯出最愛');
+}
+
+function importFavorites(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      const list = data.favorites || [];
+      let added = 0;
+      list.forEach(item => {
+        if (!isFavorite(item.videoId)) {
+          favorites.unshift(item);
+          added++;
+        }
+      });
+      if (favorites.length > 500) favorites = favorites.slice(0, 500);
+      saveFavorites();
+      renderFavoritesManager();
+      showToast(`匯入完成，新增 ${added} 首`);
+    } catch(err) {
+      showToast('匯入失敗：檔案格式錯誤');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+/* ══ EXPORT / IMPORT ══ */
+function exportBlocklist() {
+  const data = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    blockedVideos: [...blockedVideos],
+    blockedChannels: [...blockedChannels],
+    blockedChannelNames
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `music-radar-blocklist-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('已匯出黑名單');
+}
+
+function importBlocklist(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      let added = 0;
+      (data.blockedVideos || []).forEach(id => {
+        if (!blockedVideos.has(id)) { blockedVideos.add(id); added++; }
+      });
+      (data.blockedChannels || []).forEach(id => {
+        if (!blockedChannels.has(id)) { blockedChannels.add(id); added++; }
+      });
+      Object.assign(blockedChannelNames, data.blockedChannelNames || {});
+      saveBlocklist();
+      renderBlocklistManager();
+      showToast(`匯入完成，新增 ${added} 筆`);
+    } catch(err) {
+      showToast('匯入失敗：檔案格式錯誤');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';  // reset for re-import
+}
+
+/* ── CLOSE MODAL ON OVERLAY CLICK ── */
+document.getElementById('blocklistModal').addEventListener('click', e => {
+  if (e.target.id === 'blocklistModal') closeBlocklistManager();
+});
+document.getElementById('favoritesModal').addEventListener('click', e => {
+  if (e.target.id === 'favoritesModal') closeFavoritesManager();
+});
+
+/* ── ESC TO CLOSE ── */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeBlocklistManager();
+    closeFavoritesManager();
+    closeResultsDrawer();
+    closeMenu();
+  }
+});
+</script>
+</body>
+</html>
