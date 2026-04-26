@@ -400,6 +400,195 @@ body::before {
   display: flex; flex-direction: column; overflow: hidden;
 }
 
+/* ══ MOBILE PLAYER ══ */
+@media (max-width: 768px) {
+
+  /* Player fills full screen vertically */
+  .player-layout.active {
+    flex-direction: column;
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+  }
+
+  /* Hide desktop topbar on mobile */
+  .player-topbar { display: none !important; }
+
+  /* Hide desktop sidebar on mobile */
+  .player-sidebar { display: none !important; }
+
+  /* Video takes top portion */
+  .player-main {
+    flex: none;
+    height: auto;
+  }
+
+  .player-container {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    flex-shrink: 0;
+  }
+
+  #yt-player-div, #yt-player-div iframe {
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  /* Now playing info strip */
+  .mobile-now-playing {
+    padding: 10px 14px 6px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .mobile-np-title {
+    font-size: 13px; font-weight: 500; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .mobile-np-ch {
+    font-size: 11px; color: var(--text-muted); font-family: var(--mono);
+    margin-top: 2px;
+  }
+
+  /* Fixed bottom toolbar */
+  .mobile-toolbar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 56px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 0 4px;
+    z-index: 50;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.4);
+  }
+
+  .mob-btn {
+    flex: 1;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 3px;
+    background: none; border: none;
+    color: var(--text-muted);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 6px 2px;
+    border-radius: 6px;
+    transition: color 0.15s, background 0.15s;
+    min-width: 0;
+  }
+  .mob-btn:hover, .mob-btn.on { color: var(--text); }
+  .mob-btn.on-red { color: var(--red); }
+  .mob-btn-label {
+    font-family: var(--mono);
+    font-size: 8px;
+    letter-spacing: 0.5px;
+    opacity: 0.7;
+    line-height: 1;
+  }
+
+  /* Mobile search overlay */
+  .mobile-search-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 14px;
+    z-index: 100;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  }
+  .mobile-search-overlay.show { display: flex; }
+
+  .mobile-search-overlay input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 10px 12px;
+    outline: none;
+  }
+  .mobile-search-overlay input:focus { border-color: var(--red); }
+
+  .mobile-search-cancel {
+    background: none; border: none;
+    color: var(--text-muted); font-family: var(--mono);
+    font-size: 11px; cursor: pointer; padding: 6px;
+  }
+
+  /* Playlist bottom sheet */
+  .mobile-playlist-sheet {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 70vh;
+    background: var(--surface);
+    border-top: 1px solid var(--border-hover);
+    border-radius: 14px 14px 0 0;
+    z-index: 80;
+    display: flex; flex-direction: column;
+    transform: translateY(100%);
+    transition: transform 0.3s ease;
+    box-shadow: 0 -8px 32px rgba(0,0,0,0.5);
+  }
+  .mobile-playlist-sheet.show { transform: translateY(0); }
+
+  .mobile-sheet-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 79;
+    display: none;
+  }
+  .mobile-sheet-overlay.show { display: block; }
+
+  .mobile-sheet-handle {
+    width: 36px; height: 4px;
+    background: var(--border-hover);
+    border-radius: 2px;
+    margin: 12px auto 0;
+    flex-shrink: 0;
+  }
+
+  .mobile-sheet-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px 8px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .mobile-sheet-title {
+    font-family: var(--mono); font-size: 11px;
+    letter-spacing: 1px; color: var(--text-dim);
+  }
+
+  .mobile-sheet-close {
+    background: none; border: none;
+    color: var(--text-muted); font-size: 18px;
+    cursor: pointer; padding: 4px 8px;
+  }
+
+  /* Playlist list inside sheet - reuse sidebarList styles */
+  .mobile-playlist-sheet .sidebar-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+    padding-bottom: 64px; /* room for toolbar */
+  }
+
+  /* Content area (below video, above toolbar) scrollable */
+  .mobile-content {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 56px; /* toolbar height */
+  }
+}
+
 /* ── HEADER ── */
 header { margin-bottom: 48px; }
 .logo-row { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
@@ -1333,6 +1522,65 @@ footer { text-align: center; font-family: var(--mono); font-size: 10px; color: v
       </div>
       <div class="sidebar-list" id="sidebarList"></div>
     </div>
+
+    <!-- ══ MOBILE UI ══ -->
+
+    <!-- Mobile now-playing strip (shows under video) -->
+    <div class="mobile-now-playing" id="mobileNowPlaying">
+      <div class="mobile-np-title" id="mobileNpTitle">—</div>
+      <div class="mobile-np-ch" id="mobileNpCh"></div>
+    </div>
+
+    <!-- Mobile search overlay (slides down from top) -->
+    <div class="mobile-search-overlay" id="mobileSearchOverlay">
+      <input type="text" id="mobileSearchInput" placeholder="🔍 搜尋風格..." autocomplete="off" />
+      <div class="autocomplete-dropdown quick-search-dropdown" id="mobileSearchDropdown"></div>
+      <button class="mobile-search-cancel" onclick="closeMobileSearch()">取消</button>
+    </div>
+
+    <!-- Mobile bottom toolbar -->
+    <div class="mobile-toolbar" id="mobileToolbar">
+      <button class="mob-btn" id="mobSearchBtn" onclick="openMobileSearch()">
+        <span>🔍</span>
+        <span class="mob-btn-label">搜尋</span>
+      </button>
+      <button class="mob-btn on-red" id="mobAutoBtn" onclick="toggleAutoplay()">
+        <span style="font-family:var(--mono);font-size:11px;font-weight:700;">AUTO</span>
+        <span class="mob-btn-label">自動</span>
+      </button>
+      <button class="mob-btn" id="mobLoopBtn" onclick="toggleLoop()">
+        <span>↻</span>
+        <span class="mob-btn-label" id="mobLoopLabel">循環</span>
+      </button>
+      <button class="mob-btn" id="mobShuffleBtn" onclick="toggleShuffle()">
+        <span>⇄</span>
+        <span class="mob-btn-label">隨機</span>
+      </button>
+      <button class="mob-btn" id="mobFavBtn" onclick="openFavoritesManager()">
+        <span>★</span>
+        <span class="mob-btn-label">收藏</span>
+      </button>
+      <button class="mob-btn" id="mobBlockBtn" onclick="openBlocklistManager()">
+        <span>🚫</span>
+        <span class="mob-btn-label">黑名單</span>
+      </button>
+      <button class="mob-btn" id="mobListBtn" onclick="openMobilePlaylist()">
+        <span>☰</span>
+        <span class="mob-btn-label">清單</span>
+      </button>
+    </div>
+
+    <!-- Mobile playlist bottom sheet -->
+    <div class="mobile-sheet-overlay" id="mobileSheetOverlay" onclick="closeMobilePlaylist()"></div>
+    <div class="mobile-playlist-sheet" id="mobilePlaylistSheet">
+      <div class="mobile-sheet-handle"></div>
+      <div class="mobile-sheet-header">
+        <span class="mobile-sheet-title">// 播放清單</span>
+        <button class="mobile-sheet-close" onclick="closeMobilePlaylist()">✕</button>
+      </div>
+      <div class="sidebar-list" id="mobileSidebarList"></div>
+    </div>
+
   </div>
 </div>
 
@@ -2732,12 +2980,23 @@ function loadVideo(index) {
   currentIndex = index;
   playedIds.add(item.id.videoId);
 
+  // Update desktop now-playing
   document.getElementById('nowPlayingTitle').textContent = item.snippet.title;
+
+  // Update mobile now-playing strip
+  const mobileTitle = document.getElementById('mobileNpTitle');
+  const mobileCh = document.getElementById('mobileNpCh');
+  if (mobileTitle) mobileTitle.textContent = decodeHTML(item.snippet.title);
+  if (mobileCh) mobileCh.textContent = item.snippet.channelTitle || '';
+
   playVideoById(item.id.videoId);
   updateSidebarActive();
 
   const el = document.getElementById(`sid-${index}`);
   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  // Sync mobile playlist if open
+  updateMobileSidebarActive();
 }
 
 function renderSidebar() {
@@ -2745,6 +3004,7 @@ function renderSidebar() {
   list.innerHTML = queue.map((item, i) => sidebarItemHTML(item, i)).join('');
   ensureSidebarFooter();
   setupScrollSentinel();
+  syncMobilePlaylist();
 }
 
 function ensureSidebarFooter() {
@@ -3653,6 +3913,158 @@ document.getElementById('blocklistModal').addEventListener('click', e => {
 document.getElementById('favoritesModal').addEventListener('click', e => {
   if (e.target.id === 'favoritesModal') closeFavoritesManager();
 });
+
+/* ══ MOBILE PLAYER ══ */
+function isMobile() {
+  return window.innerWidth <= 768;
+}
+
+/* ── Mobile Toolbar state sync ── */
+function syncMobileToolbar() {
+  if (!isMobile()) return;
+
+  // AUTO button
+  const mobAuto = document.getElementById('mobAutoBtn');
+  if (mobAuto) mobAuto.classList.toggle('on-red', autoplay);
+
+  // LOOP button
+  const mobLoop = document.getElementById('mobLoopBtn');
+  const mobLoopLabel = document.getElementById('mobLoopLabel');
+  if (mobLoop) {
+    mobLoop.classList.toggle('on-red', loopMode !== 'off');
+    if (mobLoopLabel) {
+      mobLoopLabel.textContent = loopMode === 'one' ? '單曲' : loopMode === 'all' ? '全部' : '循環';
+    }
+  }
+
+  // SHUFFLE button
+  const mobShuffle = document.getElementById('mobShuffleBtn');
+  if (mobShuffle) mobShuffle.classList.toggle('on-red', shuffle);
+}
+
+/* ── Sync mobile playlist list content from desktop sidebar ── */
+function syncMobilePlaylist() {
+  const mobileList = document.getElementById('mobileSidebarList');
+  const desktopList = document.getElementById('sidebarList');
+  if (!mobileList || !desktopList) return;
+  // Clone desktop sidebar content into mobile sheet
+  mobileList.innerHTML = desktopList.innerHTML;
+  // Re-attach click handlers on cloned items
+  mobileList.querySelectorAll('.sidebar-item').forEach((el, i) => {
+    el.onclick = () => { loadVideo(i); closeMobilePlaylist(); };
+  });
+  mobileList.querySelectorAll('.sid-menu-btn').forEach((el, i) => {
+    el.onclick = (e) => { e.stopPropagation(); openSidebarMenu(e, i); };
+  });
+}
+
+function updateMobileSidebarActive() {
+  const mobileList = document.getElementById('mobileSidebarList');
+  if (!mobileList) return;
+  mobileList.querySelectorAll('.sidebar-item').forEach((el, i) => {
+    el.classList.toggle('active', i === currentIndex);
+    el.classList.toggle('played', playedIds.has(queue[i]?.id?.videoId) && i !== currentIndex);
+  });
+}
+
+/* ── Mobile Search ── */
+function openMobileSearch() {
+  const overlay = document.getElementById('mobileSearchOverlay');
+  if (!overlay) return;
+  overlay.classList.add('show');
+  const input = document.getElementById('mobileSearchInput');
+  if (input) {
+    input.value = '';
+    setTimeout(() => input.focus(), 100);
+  }
+  setupMobileSearch();
+}
+
+function closeMobileSearch() {
+  const overlay = document.getElementById('mobileSearchOverlay');
+  if (overlay) overlay.classList.remove('show');
+  const dropdown = document.getElementById('mobileSearchDropdown');
+  if (dropdown) dropdown.classList.remove('show');
+}
+
+let mobileSearchSetup = false;
+function setupMobileSearch() {
+  if (mobileSearchSetup) return;
+  mobileSearchSetup = true;
+
+  const input = document.getElementById('mobileSearchInput');
+  const dropdown = document.getElementById('mobileSearchDropdown');
+  if (!input) return;
+
+  input.addEventListener('input', () => {
+    const val = input.value.trim();
+    if (!val) { dropdown.classList.remove('show'); return; }
+    const lower = val.toLowerCase();
+    const suggestions = [
+      ...(JSON.parse(localStorage.getItem('yt_radar_search_history') || '[]'))
+        .filter(h => h.text.toLowerCase().includes(lower)).slice(0, 5),
+      ...memoryBank.filter(t => t.toLowerCase().includes(lower)).slice(0, 3)
+        .map(t => ({ text: t }))
+    ].slice(0, 6);
+
+    if (suggestions.length === 0) { dropdown.classList.remove('show'); return; }
+    dropdown.innerHTML = suggestions.map((s, i) =>
+      `<div class="autocomplete-item" data-index="${i}" data-text="${escAttr(s.text)}">${esc(s.text)}</div>`
+    ).join('');
+    dropdown.classList.add('show');
+    dropdown.querySelectorAll('.autocomplete-item').forEach(el => {
+      el.addEventListener('mousedown', e => {
+        e.preventDefault();
+        input.value = el.dataset.text;
+        dropdown.classList.remove('show');
+      });
+    });
+  });
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      const val = input.value.trim();
+      if (!val) return;
+      closeMobileSearch();
+      executeQuickSearch(val);
+    } else if (e.key === 'Escape') {
+      closeMobileSearch();
+    }
+  });
+}
+
+/* ── Mobile Playlist Sheet ── */
+function openMobilePlaylist() {
+  syncMobilePlaylist();
+  updateMobileSidebarActive();
+  document.getElementById('mobilePlaylistSheet')?.classList.add('show');
+  document.getElementById('mobileSheetOverlay')?.classList.add('show');
+}
+
+function closeMobilePlaylist() {
+  document.getElementById('mobilePlaylistSheet')?.classList.remove('show');
+  document.getElementById('mobileSheetOverlay')?.classList.remove('show');
+}
+
+/* ── Patch toggleAutoplay / toggleLoop / toggleShuffle to also sync mobile toolbar ── */
+const _origToggleAutoplay = toggleAutoplay;
+toggleAutoplay = function() { _origToggleAutoplay(); syncMobileToolbar(); };
+
+const _origToggleLoop = toggleLoop;
+toggleLoop = function() { _origToggleLoop(); syncMobileToolbar(); };
+
+const _origToggleShuffle = toggleShuffle;
+toggleShuffle = function() { _origToggleShuffle(); syncMobileToolbar(); };
+
+/* ── Init mobile on player open ── */
+const _origOpenPlayer = openPlayer;
+openPlayer = function(index) {
+  _origOpenPlayer(index);
+  if (isMobile()) {
+    syncMobileToolbar();
+    syncMobilePlaylist();
+  }
+};
 
 /* ── ESC TO CLOSE ── */
 document.addEventListener('keydown', e => {
