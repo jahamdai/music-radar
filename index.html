@@ -400,6 +400,13 @@ body::before {
   display: flex; flex-direction: column; overflow: hidden;
 }
 
+/* Mobile-only elements hidden on desktop */
+.mobile-now-playing,
+.mobile-toolbar,
+.mobile-search-overlay,
+.mobile-playlist-sheet,
+.mobile-sheet-overlay { display: none; }
+
 /* ══ MOBILE PLAYER ══ */
 @media (max-width: 768px) {
 
@@ -489,7 +496,7 @@ body::before {
     line-height: 1;
   }
 
-  /* Mobile search overlay */
+  /* Mobile search overlay (slides down from top) */
   .mobile-search-overlay {
     position: fixed;
     top: 0; left: 0; right: 0;
@@ -499,7 +506,7 @@ body::before {
     z-index: 100;
     display: none;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     box-shadow: 0 4px 20px rgba(0,0,0,0.5);
   }
   .mobile-search-overlay.show { display: flex; }
@@ -517,10 +524,22 @@ body::before {
   }
   .mobile-search-overlay input:focus { border-color: var(--red); }
 
+  .mobile-search-go {
+    width: 38px; height: 38px;
+    background: var(--red);
+    border: none; border-radius: 6px;
+    color: white; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: opacity 0.15s;
+  }
+  .mobile-search-go:hover { opacity: 0.85; }
+
   .mobile-search-cancel {
     background: none; border: none;
     color: var(--text-muted); font-family: var(--mono);
     font-size: 11px; cursor: pointer; padding: 6px;
+    flex-shrink: 0;
   }
 
   /* Playlist bottom sheet */
@@ -1535,6 +1554,9 @@ footer { text-align: center; font-family: var(--mono); font-size: 10px; color: v
     <div class="mobile-search-overlay" id="mobileSearchOverlay">
       <input type="text" id="mobileSearchInput" placeholder="🔍 搜尋風格..." autocomplete="off" />
       <div class="autocomplete-dropdown quick-search-dropdown" id="mobileSearchDropdown"></div>
+      <button class="mobile-search-go" id="mobileSearchGo" onclick="executeMobileSearch()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg>
+      </button>
       <button class="mobile-search-cancel" onclick="closeMobileSearch()">取消</button>
     </div>
 
@@ -3987,6 +4009,94 @@ function closeMobileSearch() {
   if (dropdown) dropdown.classList.remove('show');
 }
 
+function executeMobileSearch() {
+  const input = document.getElementById('mobileSearchInput');
+  const val = input?.value.trim();
+  if (!val) return;
+  runMobileSearch(val);
+}
+
+async function runMobileSearch(tag) {
+  const input = document.getElementById('mobileSearchInput');
+  const dropdown = document.getElementById('mobileSearchDropdown');
+  const goBtn = document.getElementById('mobileSearchGo');
+
+  if (!tag) return;
+
+  const apiKey = document.getElementById('apiKey').value.trim() || localStorage.getItem('yt_radar_key');
+  if (!apiKey) { showToast('請先填入 API Key'); return; }
+
+  // Show loading
+  if (goBtn) goBtn.disabled = true;
+  dropdown.innerHTML = '<div class="qs-results-header"><span class="loading-dot">搜尋中</span></div>';
+  dropdown.classList.add('show');
+
+  try {
+    const params = new URLSearchParams({
+      part: 'snippet', q: tag + ' music',
+      type: 'video', order: 'relevance',
+      maxResults: 15, videoCategoryId: '10',
+      videoEmbeddable: 'true', key: apiKey
+    });
+    const res = await fetch('https://www.googleapis.com/youtube/v3/search?' + params);
+    const data = await res.json();
+
+    if (data.error || !data.items?.length) {
+      dropdown.innerHTML = '<div class="qs-results-header">// 找不到結果</div>';
+      if (goBtn) goBtn.disabled = false;
+      return;
+    }
+
+    const items = filterMusicItems(data.items);
+    if (items.length === 0) {
+      dropdown.innerHTML = '<div class="qs-results-header">// 結果都被過濾掉了</div>';
+      if (goBtn) goBtn.disabled = false;
+      return;
+    }
+
+    // Save to history
+    saveMemory(tag);
+    addToSearchHistory(tag);
+
+    // Show results in dropdown
+    dropdown.innerHTML =
+      `<div class="qs-results-header">// ${items.length} 首 · 點選立即換台</div>` +
+      items.map((item, i) => {
+        const thumb = item.snippet.thumbnails?.default?.url || '';
+        return `
+          <div class="qs-result-item autocomplete-item" data-index="${i}">
+            ${thumb ? `<img class="qs-thumb" src="${thumb}" alt="" loading="lazy">` : '<div class="qs-thumb-ph"></div>'}
+            <div class="qs-info">
+              <div class="qs-title">${esc(item.snippet.title)}</div>
+              <div class="qs-ch">${esc(item.snippet.channelTitle || '')}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    dropdown.classList.add('show');
+
+    // Click handler — replace queue and play
+    dropdown.querySelectorAll('.qs-result-item').forEach((el, i) => {
+      el.addEventListener('click', () => {
+        const reordered = [...items.slice(i), ...items.slice(0, i)];
+        queue = reordered;
+        playedIds = new Set();
+        nextPageToken = null;
+        discoverPhase = 0;
+        currentIndex = 0;
+        renderSidebar();
+        loadVideo(0);
+        closeMobileSearch();
+        showToast(`已換台：${decodeHTML(items[i].snippet.title).slice(0, 30)}`);
+      });
+    });
+
+  } catch(e) {
+    dropdown.innerHTML = `<div class="qs-results-header">// 錯誤：${esc(e.message)}</div>`;
+  }
+  if (goBtn) goBtn.disabled = false;
+}
+
 let mobileSearchSetup = false;
 function setupMobileSearch() {
   if (mobileSearchSetup) return;
@@ -4013,8 +4123,7 @@ function setupMobileSearch() {
     ).join('');
     dropdown.classList.add('show');
     dropdown.querySelectorAll('.autocomplete-item').forEach(el => {
-      el.addEventListener('mousedown', e => {
-        e.preventDefault();
+      el.addEventListener('click', () => {
         input.value = el.dataset.text;
         dropdown.classList.remove('show');
       });
@@ -4025,8 +4134,7 @@ function setupMobileSearch() {
     if (e.key === 'Enter') {
       const val = input.value.trim();
       if (!val) return;
-      closeMobileSearch();
-      executeQuickSearch(val);
+      runMobileSearch(val);
     } else if (e.key === 'Escape') {
       closeMobileSearch();
     }
