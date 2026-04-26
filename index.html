@@ -2630,7 +2630,25 @@ async function playForYouItem(index) {
     const res = await fetch('https://www.googleapis.com/youtube/v3/search?' + params);
     const data = await res.json();
 
+    // Detect quota exceeded specifically
+    if (data.error?.errors?.[0]?.reason === 'quotaExceeded') {
+      showToast('今日配額已用完，只播放單首（明天台灣時間下午3點重置）');
+      queue = [{
+        id: { videoId: item.videoId },
+        snippet: {
+          title: item.title, channelTitle: item.channelTitle,
+          channelId: item.channelId || '',
+          thumbnails: { default: { url: item.thumbnail }, medium: { url: item.thumbnail } }
+        }
+      }];
+      playedIds = new Set(); nextPageToken = null; discoverPhase = 0;
+      showStatus('', ''); openPlayer(0); return;
+    }
+
     if (data.error || !data.items?.length) {
+      const errMsg = data.error ? data.error.message : '找不到結果';
+      showToast(`載入清單失敗（${errMsg}），只播放單首`);
+
       // Fallback: play just this one item if search fails
       queue = [{
         id: { videoId: item.videoId },
@@ -2650,6 +2668,25 @@ async function playForYouItem(index) {
     }
 
     const items = filterMusicItems(data.items);
+
+    if (items.length === 0) {
+      showToast('搜尋結果都被過濾掉了，只播放單首');
+      queue = [{
+        id: { videoId: item.videoId },
+        snippet: {
+          title: item.title,
+          channelTitle: item.channelTitle,
+          channelId: item.channelId || '',
+          thumbnails: { default: { url: item.thumbnail }, medium: { url: item.thumbnail } }
+        }
+      }];
+      playedIds = new Set();
+      nextPageToken = null;
+      discoverPhase = 0;
+      showStatus('', '');
+      openPlayer(0);
+      return;
+    }
     nextPageToken = data.nextPageToken || null;
     discoverPhase = 0;
     playedIds = new Set();
