@@ -2608,7 +2608,10 @@ async function playForYouItem(index) {
   const item = window._foryouItems?.[index];
   if (!item) return;
 
-  const apiKey = document.getElementById('apiKey').value.trim() || localStorage.getItem('yt_radar_key');
+  // Set global apiKey and searchOrder so loadMoreVideos works later
+  apiKey = document.getElementById('apiKey').value.trim() || localStorage.getItem('yt_radar_key');
+  searchOrder = document.getElementById('orderType')?.value || 'relevance';
+
   if (!apiKey) { showStatus('請先填入 API Key', 'error'); return; }
 
   // Set active tag to this item's source tag
@@ -3051,7 +3054,9 @@ async function executeQuickSearch(tag) {
   if (!tag) return;
   const input = document.getElementById('quickSearchInput');
   const dropdown = document.getElementById('quickSearchDropdown');
-  const apiKey = document.getElementById('apiKey').value.trim() || localStorage.getItem('yt_radar_key');
+  // Set global apiKey so loadMoreVideos works after switching
+  apiKey = document.getElementById('apiKey').value.trim() || localStorage.getItem('yt_radar_key');
+  searchOrder = document.getElementById('orderType')?.value || 'relevance';
   if (!apiKey) {
     showToast('請先填入 API Key');
     return;
@@ -4185,7 +4190,9 @@ async function runMobileSearch(tag) {
 
   if (!tag) return;
 
-  const apiKey = document.getElementById('apiKey').value.trim() || localStorage.getItem('yt_radar_key');
+  // Set global apiKey so loadMoreVideos works after switching
+  apiKey = document.getElementById('apiKey').value.trim() || localStorage.getItem('yt_radar_key');
+  searchOrder = document.getElementById('orderType')?.value || 'relevance';
   if (!apiKey) { showToast('請先填入 API Key'); return; }
 
   // Show loading
